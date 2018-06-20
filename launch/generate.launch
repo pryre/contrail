@@ -4,7 +4,7 @@
 
 	<node pkg="contrail" type="contrail_path_node" name="path_gen" clear_params="true" output="screen">
 		<param name="frame_id" value="map" />
-		<param name="arc_resolution" value="50" />
+		<param name="complex_segment_resolution" value="50" />
 
 		<remap from="path_gen/path" to="/mavel/reference/path" />
 

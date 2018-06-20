@@ -4,36 +4,54 @@ start:
   #theta: 0.0
 
 path:
-  s0:
-    type: "line"
+  s0: #Accelerate
+    present: true
     velocity: 0.2
-    length: 1.0
-    height: 0.0
-    theta: 0.0
-  s1:
-    type: "arc"
+    length: 0.2
+  s1: #Cruise to circle start
+    present: true
+    length: 0.6
+    velocity: 0.2
+  s2: #Slow down to circle start
+    present: true
     velocity: 0.05
-    height: 0.0
+    length: 0.2
+  s3: #Slow turn circle start
+    present: true
     radius: 0.1
     alpha: 1.571
     theta: 0.0
-  s2:
-    type: "arc"
+  s4: #Speed up and start circle
+    present: true
     velocity: 0.2
-    height: 0.0
     radius: 2.0
-    alpha: 6.283185308
+    alpha: 0.392699082
     theta: 0.0
-  s3:
-    type: "arc"
+  s5: #travel around circle
+    present: true
+    alpha: 5.497787143
+    radius: 2.0
+    theta: 0.0
+  s6: #Slow down for end circle
+    present: true
     velocity: 0.05
-    height: 0.0
+    radius: 2.0
+    alpha: 0.392699082
+    theta: 0.0
+  s7: #Slow turn circle end
+    present: true
     radius: 0.1
-    alpha: 1.57
+    alpha: 1.571
     theta: 0.0
-  s4:
-    type: "line"
+  s8: #Accelerate
+    present: true
     velocity: 0.2
-    length: 1.0
-    height: 0.0
-    theta: 0.0
+    length: 0.2
+  s9: #Cruise to circle start
+    present: true
+    velocity: 0.2
+    length: 0.6
+  s10: #Slow down to circle start
+    present: true
+    velocity: 0.0
+    length: 0.2

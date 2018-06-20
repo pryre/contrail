@@ -12,16 +12,16 @@
 #include <string>
 
 PathGenerate::PathGenerate() :
-	nh_("~"),
+	nhp_("~"),
 	param_frame_id_("map"),
-	param_arc_res_(0),
+	param_res_(50),
 	running_seq_(0) {
 
 	//Setup publisher and get known parameters
-	pub_path_ = nh_.advertise<nav_msgs::Path>("path", 1, true);
+	pub_path_ = nhp_.advertise<nav_msgs::Path>("path", 1, true);
 
-	nh_.param("frame_id", param_frame_id_, param_frame_id_);
-	nh_.param("arc_resolution", param_arc_res_, param_arc_res_);
+	nhp_.param("frame_id", param_frame_id_, param_frame_id_);
+	nhp_.param("complex_segment_resolution", param_res_, param_res_);
 
 	//Give the node a moment to recieve a clock message (to allow it to work with simulated time)
 	ros::Duration(0.2).sleep();
@@ -65,20 +65,20 @@ bool PathGenerate::load_start_params(void) {
 	double start_t = 0.0;
 	double start_v = 0.0;
 
-	if( nh_.getParam("start/position", start_p) &&
-		nh_.getParam("start/alpha", start_a) ) {
+	if( nhp_.getParam("start/position", start_p) &&
+		nhp_.getParam("start/alpha", start_a) ) {
 
 		param_start_position_ = vector_from_doubles(start_p);
 		param_start_direction_ = quaternion_from_yaw(start_a);
 
-		if( nh_.getParam("start/theta", start_t) ) {
+		if( nhp_.getParam("start/theta", start_t) ) {
 			param_start_orientation_ = quaternion_from_yaw(start_t);
 		} else {
 			ROS_WARN("Using starting direction as starting orientation");
 			param_start_orientation_ = param_start_direction_;
 		}
 
-		if( !nh_.getParam("start/velocity", start_v) ) {
+		if( !nhp_.getParam("start/velocity", start_v) ) {
 			ROS_WARN("Assuming path starts with zero velocity");
 		}
 		param_start_velocity_ = start_v;
@@ -93,88 +93,158 @@ bool PathGenerate::generate_path() {
 	bool error = false;
 
 	int i = 0;
-	std::string seg_type;
 
 	Eigen::Vector3d pc = param_start_position_;	//Current position
 	Eigen::Quaterniond qcp = param_start_direction_;	//Current direction of the path
 	Eigen::Quaterniond qcr = param_start_orientation_;	//Current direction of the robot
 	double vc = param_start_velocity_;
-	double vc_last = param_start_velocity_;
+	double velocity_last = param_start_velocity_;
+
+	bool seg_present = false;
 
 	//Loop through every segment available
-	while( (!error) && nh_.getParam("path/s" + std::to_string(i) + "/type", seg_type) ) {
+	while( (!error) && nhp_.getParam("path/s" + std::to_string(i) + "/present", seg_present) ) {
+		bool reticulate = false;
+
 		double height = 0.0;
+		nhp_.getParam("path/s" + std::to_string(i) + "/height", height);
+
+		bool use_qo = false;
+		Eigen::Quaterniond qo = Eigen::Quaterniond::Identity();
+		double theta = 0.0;
+		if( nhp_.getParam("path/s" + std::to_string(i) + "/theta", theta) ) {
+			qo = quaternion_from_yaw(theta);
+			use_qo = true;
+		}
+
+		double hold_time = 0.0;
+		double length = 0.0;
 		double velocity = 0.0;
-		if( nh_.getParam("path/s" + std::to_string(i) + "/velocity", velocity) &&
-			nh_.getParam("path/s" + std::to_string(i) + "/height", height) ) {
 
-			bool use_qo = false;
-			Eigen::Quaterniond qo = Eigen::Quaterniond::Identity();
-			double theta = 0.0;
-			if( nh_.getParam("path/s" + std::to_string(i) + "/theta", theta) ) {
-				qo = quaternion_from_yaw(theta);
-				use_qo = true;
+		nhp_.getParam("path/s" + std::to_string(i) + "/hold_time", hold_time);
+		nhp_.getParam("path/s" + std::to_string(i) + "/length", length);
+
+		if(!nhp_.getParam("path/s" + std::to_string(i) + "/velocity", velocity) ) {
+			ROS_DEBUG("Maintaining segment velocity (seg: %i)", i);
+			velocity = velocity_last;
+		}
+
+		if(velocity < 0.0) {
+			ROS_ERROR("Negative velocity specified (seg: %i)", i);
+			error = true;
+		}
+
+		if(hold_time <= 0.0) {
+			if( (velocity == 0.0 && velocity_last == 0.0) ) {
+				ROS_ERROR("Line segment has no start or end velocity (seg: %i)", i);
+				error = true;
+			} else if(velocity != velocity_last) {
+				//There is a change in velocity for this segment
+				reticulate = true;
 			}
+		}
 
-			if(seg_type == "line") {
-				double length = 0.0;
-				if(velocity == 0.0 && vc_last == 0.0) {
-					ROS_ERROR("Line segment has no start and end velocity(%i)", i);
-					error = true;
-				} else if( nh_.getParam("path/s" + std::to_string(i) + "/length", length) ) {
-					pc += qcp.toRotationMatrix()*Eigen::Vector3d(length, 0.0, 0.0) + Eigen::Vector3d(0.0, 0.0, height);
+		double alpha = 0.0;
+		double radius = 0.0;
+		bool use_alpha = nhp_.getParam("path/s" + std::to_string(i) + "/alpha", alpha);
+		bool use_radius = nhp_.getParam("path/s" + std::to_string(i) + "/radius", radius);
 
-					double dist = Eigen::Vector3d(length, 0.0, height).norm();	//Segment distance
+		if(use_radius && !use_alpha) {
+			ROS_ERROR("Arc radius defined but rotation angle (alpha) defined (seg: %i)", i);
+			error = true;
+		} else if(use_alpha) {
+			reticulate = true;
+		}
 
+		if(!error) {
+			//Handle the basic cases first
+			if(!reticulate) {
+				ROS_DEBUG("Simple line segment (%i)", i);
+
+				if(hold_time > 0.0) {
 					qcr = (use_qo ? qo : qcr);	//Override the current heading if requested, else hold current heading
 
-					add_pose(travel_time(dist, velocity), pose_from_eigen(pc, qcr) );
-				} else {
-					ROS_ERROR("Could not load length for line segment (%i)", i);
-					error = true;
-				}
-			} else if(seg_type == "arc") {
-				double radius = 0.0;
-				double alpha = 0.0;
-
-				if( nh_.getParam("path/s" + std::to_string(i) + "/radius", radius) &&
-					nh_.getParam("path/s" + std::to_string(i) + "/alpha", alpha) ) {
-
-					double hold_time = 0.0;
-
-					if(velocity == 0.0) {
-						nh_.getParam("path/s" + std::to_string(i) + "/hold_time", hold_time);
-					}
-
-					double dalpha = alpha / param_arc_res_;
-					double dx = std::fabs(radius*dalpha);
-					double dz = height / param_arc_res_;
-
-					//Go through each subsegment
-					for(int j=1; j<=param_arc_res_; j++) {
-						double alpha = (double)j / (double)param_arc_res_;
-						pc += qcp.toRotationMatrix()*Eigen::Vector3d(dx, 0.0, 0.0) + Eigen::Vector3d(0.0, 0.0, dz);
-						qcp *= quaternion_from_yaw(dalpha);
-						qcr *=quaternion_from_yaw(dalpha);
-
-						double dist = Eigen::Vector3d(dx, 0.0, dz).norm();	//Segment distance
-						ros::Duration seg_time = (hold_time > 0.0) ? ros::Duration(hold_time / param_arc_res_) : travel_time(dist, velocity);
-
+					add_pose(ros::Duration(hold_time), pose_from_eigen(pc, qcr) );
+				} else if( (velocity > 0.0) ) {
+					if( (length > 0.0) || (height != 0.0) ) {
+						pc += qcp.toRotationMatrix()*Eigen::Vector3d(length, 0.0, 0.0) + Eigen::Vector3d(0.0, 0.0, height);
+						double dist = Eigen::Vector3d(length, 0.0, height).norm();	//Segment distance
 						qcr = (use_qo ? qo : qcr);	//Override the current heading if requested, else hold current heading
 
-						add_pose(seg_time, pose_from_eigen(pc, qcr) );
+						add_pose(travel_time(dist, velocity), pose_from_eigen(pc, qcr) );
+					} else {
+						ROS_ERROR("Invalid length for simple line segment (seg: %i)", i);
+						error = true;
 					}
 				} else {
-					ROS_ERROR("Could not load radius and alpha for arc segment (%i)", i);
+					ROS_ERROR("Could not identify simple segment type to use (seg: %i)", i);
+					ROS_ERROR("Params (#%i): hold_t=%0.4f; vel_last=%0.4f; vel_end=%0.4f; height=%0.4f; theta=%0.4f; length=%0.4f; alpha=%0.4f; radius=%0.4f",
+										i, hold_time, velocity_last, velocity, height, theta, length, alpha, radius);
+
 					error = true;
 				}
 			} else {
-				ROS_ERROR("Unkown type (%s) for segment %i", seg_type.c_str(), i);
-				error = true;
+				ROS_DEBUG("Complex line segment (%i)", i);
+
+				//Go through each subsegment
+				double dalpha = alpha / param_res_;
+				double dx = 0.0;
+				double dz = height / param_res_;
+				ros::Duration seg_time(0);
+
+				//XXX: The complete segment should get the velocity to 1 "tick"
+				//		away from the final value, otherwise the last segment will
+				//		have a velocity of zero
+				double dv = (velocity - velocity_last) / (param_res_ + 1);
+				double vc_seg = velocity_last;
+
+				for(int j=1; j<=param_res_; j++) {
+					vc_seg += dv;
+
+					//Figure out if it's a line, arc, or stopped turn
+					if(hold_time > 0.0) {
+						qcp *= quaternion_from_yaw(dalpha);
+						qcr *= quaternion_from_yaw(dalpha);
+
+						seg_time = ros::Duration(hold_time / param_res_);
+					} else {	//Just to ensure correct check logic
+						if(use_radius) { //Handle as an arc
+							dx = std::fabs(radius*dalpha);
+
+							pc += qcp.toRotationMatrix()*Eigen::Vector3d(dx, 0.0, 0.0) + Eigen::Vector3d(0.0, 0.0, dz);
+							qcp *= quaternion_from_yaw(dalpha);
+							qcr *= quaternion_from_yaw(dalpha);
+
+							double dist = Eigen::Vector3d(dx, 0.0, dz).norm();	//Segment distance
+							seg_time = travel_time(dist, vc_seg);
+						} else if((length > 0.0) || (dz != 0.0) ) { //Else handle as a line
+							dx = length / param_res_;
+							pc += qcp.toRotationMatrix()*Eigen::Vector3d(dx, 0.0, 0.0) + Eigen::Vector3d(0.0, 0.0, dz);
+
+							double dist = Eigen::Vector3d(dx, 0.0, dz).norm();	//Segment distance
+							seg_time = travel_time(dist, vc_seg);
+
+						} else {
+							error = true;
+						}
+					}
+
+					//Add in the segment if it is valid
+					if(!error) {
+						qcr = (use_qo ? qo : qcr);	//Override the current heading if requested, else hold current heading
+						add_pose(seg_time, pose_from_eigen(pc, qcr) );
+					} else {
+						ROS_ERROR("Could not identify reticulated segment type to use (seg: %i)", i);
+						ROS_ERROR("Params (#%i): hold_t=%0.4f; vel_last=%0.4f; vel_end=%0.4f; height=%0.4f; theta=%0.4f; length=%0.4f; alpha=%0.4f; radius=%0.4f",
+											i, hold_time, velocity_last, velocity, height, theta, length, alpha, radius);
+
+						break;
+					}
+				}
 			}
-		} else {
-			ROS_ERROR("Could not load height or velocity info for segment %i", i);
-			error = true;
+
+			//Update running variables
+			velocity_last = velocity;
 		}
 
 		i++;

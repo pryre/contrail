@@ -10,7 +10,7 @@
 
 class PathGenerate {
 	private:
-		ros::NodeHandle nh_;
+		ros::NodeHandle nhp_;
 
 		ros::Publisher pub_path_;
 
@@ -19,11 +19,11 @@ class PathGenerate {
 		ros::Time running_stamp_;
 
 		std::string param_frame_id_;
-		int param_arc_res_;
+		int param_res_;
 		Eigen::Vector3d param_start_position_;
 		Eigen::Quaterniond param_start_direction_;
 		Eigen::Quaterniond param_start_orientation_;
-		Eigen::Quaterniond param_start_velocity_;
+		double param_start_velocity_;
 
 	public:
 		PathGenerate( void );

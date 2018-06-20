@@ -19,7 +19,7 @@ PathExtract::PathExtract( ros::NodeHandle *nh, Eigen::Affine3d init_pose ) :
 	latest_g_(init_pose) {
 
 	sub_path_ = nh_->subscribe<nav_msgs::Path>( "reference/path", 10, &PathExtract::callback_path, this );
-	sub_fallback_ = nh_->subscribe<geometry_msgs::PoseStamped>( "reference/fallback", 10, &PathExtract::callback_fallback, this );
+	sub_fallback_ = nh_->subscribe<geometry_msgs::PoseStamped>( "reference/path_fallback", 10, &PathExtract::callback_fallback, this );
 }
 
 PathExtract::~PathExtract( void ) {
