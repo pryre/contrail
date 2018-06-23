@@ -144,11 +144,22 @@ bool PathExtract::get_ref_state(Eigen::Affine3d &g_c, Eigen::Vector3d &v_c, cons
 		g_c = g_t;
 		v_c = v_t;
 	} else {
-		//Something went wrong, fall back to the last know safe values
-		g_c = latest_g_;
-		v_c = Eigen::Vector3d::Zero();
+		//If we failed to get the current path point,
+		//  but there we have an ok fallback
+		if(have_fallback_) {
+			//Use the fallback hold
+			g_c = latest_g_;
+			v_c = Eigen::Vector3d::Zero();
 
-		reset_hinting();
+			//Declare a partial success
+			success = true;
+		} else {
+			//Something went wrong, fall back to the last know safe values
+			g_c = Eigen::Affine3d::Identity();
+			v_c = Eigen::Vector3d::Zero();
+
+			reset_hinting();
+		}
 	}
 
 	return success;
