@@ -107,7 +107,7 @@ catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}_path_extract
 # CATKIN_DEPENDS nav_msgs roscpp
-  DEPENDS Eigen3
+  DEPENDS EIGEN3
 )
 
 ###########
@@ -119,7 +119,7 @@ catkin_package(
 include_directories(
   include
   ${catkin_INCLUDE_DIRS}
-  ${Eigen3_INCLUDE_DIRS}
+  ${EIGEN3_INCLUDE_DIRS}
 )
 
 ## Declare a C++ library
