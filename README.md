@@ -1,5 +1,5 @@
 # contrail
- A collection of nodes and libraries to generate and follow a velocity-dependant path in 3D space.
+A collection of nodes and libraries to generate and track a velocity-dependant trajectory in 3D space.
 
 ## Usage
 `roslaunch contrail generate.launch path_name:=circle`
