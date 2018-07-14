@@ -10,7 +10,10 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   nav_msgs
   geometry_msgs
+  contrail_msgs
   roscpp
+  message_generation
+  dynamic_reconfigure
 )
 
 ## System dependencies are found with CMake's conventions
@@ -89,10 +92,9 @@ find_package(Eigen3 REQUIRED)
 ##     and list every .cfg file to be processed
 
 ## Generate dynamic reconfigure parameters in the 'cfg' folder
-# generate_dynamic_reconfigure_options(
-#   cfg/DynReconf1.cfg
-#   cfg/DynReconf2.cfg
-# )
+generate_dynamic_reconfigure_options(
+  cfg/ManagerParams.cfg
+)
 
 ###################################
 ## catkin specific configuration ##
@@ -105,7 +107,7 @@ find_package(Eigen3 REQUIRED)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include
-  LIBRARIES ${PROJECT_NAME}_path_extract
+  LIBRARIES ${PROJECT_NAME}_manager
 # CATKIN_DEPENDS nav_msgs roscpp
   DEPENDS EIGEN3
 )
@@ -123,24 +125,24 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(${PROJECT_NAME}_path_generate
-  src/${PROJECT_NAME}/path_generate.cpp
+add_library(${PROJECT_NAME}_manager
+  src/${PROJECT_NAME}/manager.cpp
 )
 
-add_library(${PROJECT_NAME}_path_extract
-  src/${PROJECT_NAME}/path_extract.cpp
-)
+#add_library(${PROJECT_NAME}_path_extract
+#  src/${PROJECT_NAME}/path_extract.cpp
+#)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-add_dependencies(${PROJECT_NAME}_path_generate ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(${PROJECT_NAME}_path_extract ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+#add_dependencies(${PROJECT_NAME}_path_extract ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-add_executable(${PROJECT_NAME}_path_node src/path_node.cpp)
+#add_executable(${PROJECT_NAME}_path_node src/path_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -150,11 +152,10 @@ add_executable(${PROJECT_NAME}_path_node src/path_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-add_dependencies(${PROJECT_NAME}_path_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+#add_dependencies(${PROJECT_NAME}_path_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME}_path_node
-  ${PROJECT_NAME}_path_generate
+target_link_libraries(${PROJECT_NAME}_manager
   ${catkin_LIBRARIES}
 )
 

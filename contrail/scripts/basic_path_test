@@ -1,0 +1,77 @@
+#!/usr/bin/env python2
+
+import sys
+from math import *
+
+import rospy
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
+
+global pub_pos
+global timer
+
+def e_to_q(roll,pitch,yaw):
+	cy = cos(yaw * 0.5);
+	sy = sin(yaw * 0.5);
+	cr = cos(roll * 0.5);
+	sr = sin(roll * 0.5);
+	cp = cos(pitch * 0.5);
+	sp = sin(pitch * 0.5);
+
+	w = cy * cr * cp + sy * sr * sp;
+	x = cy * sr * cp - sy * cr * sp;
+	y = cy * cr * sp + sy * sr * cp;
+	z = sy * cr * cp - cy * sr * sp;
+
+	return (w,x,y,z)
+
+def timer_callback(e):
+	global pub_pos
+	global timer
+
+	if e.current_real > rospy.Time(0):
+		pos_x = float(sys.argv[1])
+		pos_y = float(sys.argv[2])
+		pos_z = float(sys.argv[3])
+		lx = [0.0,pos_x,-pos_x,-pos_x,pos_x,0.0]
+		ly = [0.0,pos_y,pos_y,-pos_y,-pos_y,0.0]
+		lyaw = [0.0,pi/4,3*pi/4,-3*pi/4,-pi/4,0.0]
+		rospy.loginfo("Commanding a outwards-facing %0.2fx%0.2fm square at %0.2fm altitude" % (pos_x,pos_y,pos_z))
+
+		msg_out = Path()
+		msg_out.header.frame_id = "map"
+		msg_out.header.stamp = e.current_real
+
+		for i in range(len(lx)):
+			msg_out.poses.append(PoseStamped())
+			msg_out.poses[i].header = msg_out.header
+			msg_out.poses[i].header.seq = i + 1
+			msg_out.poses[i].pose.position.x = lx[i]
+			msg_out.poses[i].pose.position.y = ly[i]
+			msg_out.poses[i].pose.position.z = pos_z
+			(w,x,y,z) = e_to_q(0.0,0.0,lyaw[i])
+			msg_out.poses[i].pose.orientation.w = w
+			msg_out.poses[i].pose.orientation.x = x
+			msg_out.poses[i].pose.orientation.y = y
+			msg_out.poses[i].pose.orientation.z = z
+			rospy.loginfo("Adding to path: [%0.2f;%0.2f;%0.2f;%0.2f]" % (lx[i],ly[i],pos_z,lyaw[i]))
+
+		pub_pos.publish(msg_out)
+		timer.shutdown()
+
+def waypoint_pub():
+	global timer
+	global pub_pos
+	rospy.init_node('talker', anonymous=True)
+	pub_pos = rospy.Publisher('/mantis_uav/mavel/reference/contrail/path', Path, queue_size=10, latch=True)
+
+	rospy.loginfo("Sending basic path reference")
+	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
+
+	rospy.spin()
+
+if __name__ == '__main__':
+	try:
+		waypoint_pub()
+	except rospy.ROSInterruptException:
+		pass

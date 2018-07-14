@@ -1,0 +1,12 @@
+uint8 TRACKING_NONE = 0
+uint8 TRACKING_SPLINE = 1
+uint8 TRACKING_PATH = 2
+uint8 TRACKING_POSE = 3
+
+# Set using the "TRACKING_*" options defined above
+# If no match is found the request will be rejected
+uint8 tracking
+
+---
+
+bool success
