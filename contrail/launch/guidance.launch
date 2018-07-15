@@ -1,0 +1,10 @@
+<?xml version='1.0'?>
+<launch>
+	<node pkg="contrail" type="contrail_guidance_node" name="guidance" clear_params="true"
+		ns="" output="screen">
+		<param name="update_rate" value="50.0" />
+
+		<!--remap from="guidance/command/triplet" to="/triplet" /-->
+		<remap from="guidance/state/odom" to="/odom" />
+	</node>
+</launch>

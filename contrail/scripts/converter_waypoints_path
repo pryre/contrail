@@ -1,0 +1,69 @@
+#!/usr/bin/env python2
+
+from math import *
+
+import rospy
+from nav_msgs.msg import Path
+from geometry_msgs.msg import PoseStamped
+from contrail_msgs.msg import WaypointList
+
+global pub_path
+global sub_wayp
+
+def e_to_q(roll,pitch,yaw):
+	cy = cos(yaw * 0.5);
+	sy = sin(yaw * 0.5);
+	cr = cos(roll * 0.5);
+	sr = sin(roll * 0.5);
+	cp = cos(pitch * 0.5);
+	sp = sin(pitch * 0.5);
+
+	w = cy * cr * cp + sy * sr * sp;
+	x = cy * sr * cp - sy * cr * sp;
+	y = cy * cr * sp + sy * sr * cp;
+	z = sy * cr * cp - cy * sr * sp;
+
+	return (w,x,y,z)
+
+def callback_wp(msg_in):
+	global pub_path
+
+	# Make sure it is a valid waypoint message
+	if (msg_in.header.stamp > rospy.Time(0)) and (len(msg_in.waypoints) > 0):
+		msg_out = Path()
+		msg_out.header = msg_in.header
+
+		rospy.loginfo("Converting %i waypoints to path" % (len(msg_in.waypoints)))
+
+		for i in range(len(msg_in.waypoints)):
+			p = PoseStamped()
+			p.header = msg_in.header
+			p.header.seq = i
+			p.pose.position.x = msg_in.waypoints[i].position.x
+			p.pose.position.y = msg_in.waypoints[i].position.y
+			p.pose.position.z = msg_in.waypoints[i].position.z
+			(w,x,y,z) = e_to_q(0.0,0.0,msg_in.waypoints[i].yaw)
+			p.pose.orientation.w = w
+			p.pose.orientation.x = x
+			p.pose.orientation.y = y
+			p.pose.orientation.z = z
+			msg_out.poses.append(p)
+
+		pub_path.publish(msg_out)
+
+def waypoint_converter():
+	global pub_path
+	global sub_wayp
+	rospy.init_node('converter_waypoint_path', anonymous=True)
+	sub_wayp = rospy.Subscriber('~waypoints', WaypointList, callback_wp)
+	pub_path = rospy.Publisher('~path', Path, queue_size=10, latch=True)
+
+	rospy.loginfo("Waypoint-Path converter running")
+
+	rospy.spin()
+
+if __name__ == '__main__':
+	try:
+		waypoint_converter()
+	except rospy.ROSInterruptException:
+		pass

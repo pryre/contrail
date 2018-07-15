@@ -1,6 +1,6 @@
 std_msgs/Header header
 
-# Current step in the discrete path
+# Latest step in the discrete path completed
 uint32 current
 
 # Overall path progess (1.0 = 100%)

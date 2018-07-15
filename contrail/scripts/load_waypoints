@@ -1,0 +1,64 @@
+#!/usr/bin/env python2
+
+import sys
+from math import *
+
+import rospy
+from contrail_msgs.msg import Waypoint
+from contrail_msgs.msg import WaypointList
+
+global pub_wpl
+global timer
+
+def timer_callback(e):
+	global pub_wpl
+	global timer
+
+	if e.current_real > rospy.Time(0):
+		if( rospy.has_param("~waypoints/wp0/x") and \
+			rospy.has_param("~waypoints/wp0/y") and \
+			rospy.has_param("~waypoints/wp0/z") and \
+			rospy.has_param("~waypoints/wp0/yaw") ):
+
+			msg_out = WaypointList()
+			msg_out.header.frame_id = rospy.get_param("~frame_id", "map")
+			msg_out.header.stamp = e.current_real
+
+			i = 0
+			while( rospy.has_param("~waypoints/wp%i/x" % (i)) and \
+				   rospy.has_param("~waypoints/wp%i/y" % (i)) and \
+				   rospy.has_param("~waypoints/wp%i/z" % (i)) and \
+				   rospy.has_param("~waypoints/wp%i/yaw" % (i)) ):
+
+				msg_out.waypoints.append(Waypoint())
+				msg_out.waypoints[i].position.x = rospy.get_param("~waypoints/wp%i/x" % (i))
+				msg_out.waypoints[i].position.y = rospy.get_param("~waypoints/wp%i/y" % (i))
+				msg_out.waypoints[i].position.z = rospy.get_param("~waypoints/wp%i/z" % (i))
+				msg_out.waypoints[i].yaw = rospy.get_param("~waypoints/wp%i/yaw" % (i))
+
+				i += 1
+
+			rospy.loginfo("Loaded %i waypoints" % (i))
+
+			pub_wpl.publish(msg_out)
+			timer.shutdown()
+		else:
+			rospy.logerr("Unable to locate waypoint parameters")
+			rospy.signal_shutdown("Error: no waypoints")
+
+def waypoint_pub():
+	global timer
+	global pub_wpl
+	rospy.init_node('load_waypoints', anonymous=True)
+	pub_wpl = rospy.Publisher('/waypoints', WaypointList, queue_size=10, latch=True)
+
+	rospy.loginfo("Loading waypionts from parameters...")
+	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
+
+	rospy.spin()
+
+if __name__ == '__main__':
+	try:
+		waypoint_pub()
+	except rospy.ROSInterruptException:
+		pass

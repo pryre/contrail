@@ -6,6 +6,7 @@ find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	rospy
 	std_msgs
+	geometry_msgs
 	message_generation
 )
 
@@ -16,12 +17,15 @@ add_service_files(FILES
 
 add_message_files(FILES
 	CubicSpline.msg
-	WaypointProgress.msg
+	PathProgress.msg
+	Waypoint.msg
+	WaypointList.msg
 )
 
 ## Generate added messages and services
 generate_messages(DEPENDENCIES
 	std_msgs
+	geometry_msgs
 )
 
 ## Declare a catkin package

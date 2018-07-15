@@ -128,6 +128,9 @@ include_directories(
 add_library(${PROJECT_NAME}_manager
   src/${PROJECT_NAME}/manager.cpp
 )
+add_library(${PROJECT_NAME}_guidance
+  src/${PROJECT_NAME}/guidance.cpp
+)
 
 #add_library(${PROJECT_NAME}_path_extract
 #  src/${PROJECT_NAME}/path_extract.cpp
@@ -137,12 +140,13 @@ add_library(${PROJECT_NAME}_manager
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+add_dependencies(${PROJECT_NAME}_guidance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 #add_dependencies(${PROJECT_NAME}_path_extract ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
-#add_executable(${PROJECT_NAME}_path_node src/path_node.cpp)
+add_executable(${PROJECT_NAME}_guidance_node src/guidance_node.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -152,10 +156,20 @@ add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${c
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-#add_dependencies(${PROJECT_NAME}_path_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME}_guidance_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_manager
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(${PROJECT_NAME}_guidance
+  ${PROJECT_NAME}_manager
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(${PROJECT_NAME}_guidance_node
+  ${PROJECT_NAME}_guidance
   ${catkin_LIBRARIES}
 )
 
