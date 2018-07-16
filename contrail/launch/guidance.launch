@@ -5,6 +5,11 @@
 		<param name="update_rate" value="50.0" />
 		<param name="do_feedback" value="true" />
 
+		<param name="contrail/fallback_to_pose" value="true" />
+		<param name="contrail/waypoint_hold_duration" value="2.0" />
+		<param name="contrail/waypoint_radius" value="0.1" />
+		<param name="contrail/waypoint_yaw_accuracy" value="0.1" />
+
 		<!--remap from="guidance/command/triplet" to="/triplet" /-->
 		<remap from="guidance/state/odom" to="/odom" />
 	</node>
