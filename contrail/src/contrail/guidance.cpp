@@ -19,6 +19,7 @@ Guidance::Guidance( void ) :
 
 	current_g_ = Eigen::Affine3d::Identity();
 	nhp_.param( "update_rate", param_rate_, param_rate_ );
+	nhp_.param( "do_feedback", param_do_feedback_, param_do_feedback_ );
 
 	sub_state_odometry_ = nhp_.subscribe<nav_msgs::Odometry>( "state/odom", 10, &Guidance::callback_odom, this );
 
@@ -68,7 +69,7 @@ void Guidance::callback_timer( const ros::TimerEvent& e ) {
 			t.header = traj.header;
 
 			p.pose.position = traj.position;
-			Eigen::Quaterniond q(Eigen::AngleAxisd(traj.yaw, Eigen::Vector3d::Zero()));
+			Eigen::Quaterniond q(Eigen::AngleAxisd(traj.yaw, Eigen::Vector3d::UnitZ()));
 			p.pose.orientation.w = q.w();
 			p.pose.orientation.x = q.x();
 			p.pose.orientation.y = q.y();
@@ -81,6 +82,9 @@ void Guidance::callback_timer( const ros::TimerEvent& e ) {
 			t.twist.angular.x = 0.0;
 			t.twist.angular.y = 0.0;
 			t.twist.angular.z = traj.yaw_rate;
+
+			pub_output_position_.publish(p);
+			pub_output_velocity_.publish(t);
 		}
 	}
 }
