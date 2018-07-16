@@ -50,7 +50,7 @@ def waypoint_pub():
 	global timer
 	global pub_wpl
 	rospy.init_node('load_waypoints', anonymous=True)
-	pub_wpl = rospy.Publisher('/waypoints', WaypointList, queue_size=10, latch=True)
+	pub_wpl = rospy.Publisher('waypoints', WaypointList, queue_size=10, latch=True)
 
 	rospy.loginfo("Loading waypionts from parameters...")
 	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
