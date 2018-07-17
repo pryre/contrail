@@ -108,7 +108,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
   INCLUDE_DIRS include
   LIBRARIES ${PROJECT_NAME}_manager
-# CATKIN_DEPENDS nav_msgs roscpp
+  CATKIN_DEPENDS contrail_msgs
   DEPENDS EIGEN3
 )
 
