@@ -34,9 +34,7 @@ public:
       // Spline fitting here. X values are scaled down to [0, 1] for this.
       spline_(Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(
                 y_vec.transpose(),
-                 // No more than cubic spline, but accept short vectors.
-
-                std::min<int>(x_vec.rows() - 1, 3),
+                std::min<int>(x_vec.rows() - 1, 3),	//No more than cubic spline, but accept short vectors.
                 scaled_values(x_vec)))
   { }
 
@@ -93,6 +91,7 @@ class ContrailManager {
 		ros::Subscriber sub_pose_;
 
 		ros::Publisher pub_discrete_progress_;	//Publishes the current path index when a discrete setpoint is reached
+		ros::Publisher pub_spline_approx_;	//Publishes a approximate visualization of the calculated spline as feedback
 
 		ros::ServiceServer srv_set_tracking_;
 		dynamic_reconfigure::Server<contrail::ManagerParamsConfig> dyncfg_settings_;
@@ -114,7 +113,8 @@ class ContrailManager {
 		Eigen::Spline spline_pz_;	//Position Z
 		Eigen::Spline spline_ry_;	//Yaw
 		*/
-		Eigen::Spline<double, 4> spline_;	//[X,Y,Z,y]
+		typedef Eigen::Spline<double, 5> Spline5d;
+		Spline5d spline_;	//[time;X;Y;Z;yaw]
 
 		TrackingRef tracked_ref_;
 
@@ -170,6 +170,7 @@ class ContrailManager {
 		bool callback_set_tracking( contrail_msgs::SetTracking::Request &req, contrail_msgs::SetTracking::Response &res );
 
 		void publish_waypoint_reached( const std::string frame_id, const ros::Time t, const uint32_t wp_c, const uint32_t wp_num );
+		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const double ts, const double te, const int steps, const Spline5d& s);
 
 		//Returns true if the messages contain valid data
 		bool check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t );
@@ -191,6 +192,34 @@ class ContrailManager {
 
 		double yaw_from_quaternion( const geometry_msgs::Quaternion &q );
 		double yaw_from_quaternion( const Eigen::Quaterniond &q );
+		Eigen::Quaterniond quaternion_from_yaw( const double yaw );
+
+		//Spline helper functions
+		//Get the interpolated point from the spline,
+		//	t should be the normalized time
+		inline void get_spline_reference(Eigen::VectorXd& p_interp, Eigen::VectorXd& v_interp, const double t) const {
+			// x values need to be scaled down in extraction as well.
+			ROS_ASSERT_MSG((t >= 0.0) && (t <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
+			p_interp = spline_(t);
+		}
+
+		// Helpers to scale X values down to [0, 1]
+		inline double normalize(double x, const double min, const double max) const {
+			return (x - min) / (max - min);
+		}
+
+		/*
+		template<typename Scalar>
+		struct CwiseNormalizeOp {
+		  CwiseNormalizeOp(const Scalar& min, const Scalar& max) : min_(min), max_(max) {}
+		  const Scalar operator()(const Scalar& x) const { return (x - min_) / (max_ - min_); }
+		  Scalar min_, max_;
+		};
+		inline Eigen::VectorXd normalize(const Eigen::VectorXd &x_vec) const {
+			//save searching for the min and max constantly
+			return x_vec.unaryExpr(CwiseNormalizeOp<double>(x_vec.minCoeff(), x_vec.maxCoeff()));
+		}
+		*/
 
 		Eigen::Vector3d position_from_msg( const geometry_msgs::Point &p );
 		Eigen::Quaterniond quaternion_from_msg( const geometry_msgs::Quaternion &q );
@@ -200,5 +229,4 @@ class ContrailManager {
 		geometry_msgs::Point point_from_eig( const Eigen::Vector3d &p );
 		geometry_msgs::Quaternion quaternion_from_eig( const Eigen::Quaterniond &q );
 		geometry_msgs::Pose pose_from_eig( const Eigen::Affine3d &g );
-
 };

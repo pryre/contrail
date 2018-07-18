@@ -44,6 +44,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nh, const bool use_init_pose, 
 	sub_pose_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/contrail/pose", 10, &ContrailManager::callback_discrete_pose, this );
 
 	pub_discrete_progress_ = nhp_.advertise<contrail_msgs::PathProgress>( "feedback/contrail/discrete_progress", 10 );
+	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "feedback/contrail/spline_approximation", 10 );
 
 	srv_set_tracking_ = nhp_.advertiseService("contrail/set_tracking", &ContrailManager::callback_set_tracking, this);
 
@@ -146,6 +147,9 @@ bool ContrailManager::get_spline_reference( mavros_msgs::PositionTarget &ref, co
 
 	if( has_spline_reference(t) ) {
 		//TODO: Spline tracking
+			//Check time is within spline time
+			//Get normalized time
+			//Interpolate spline
 	}
 
 	return success;
@@ -280,6 +284,32 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 
 	if( check_msg_spline(spline, tc) ) {
 		msg_spline_ = spline;
+		int num_knots = msg_spline_.t.size();
+
+		Eigen::MatrixXd knots(5,num_knots);
+		double ts = ros::Duration(msg_spline_.t[0].sec,msg_spline_.t[0].nsec).toSec();
+		double te = ros::Duration(msg_spline_.t[num_knots].sec,msg_spline_.t[num_knots].nsec).toSec();
+
+		for(int i=0; i<num_knots; i++) {
+			double tc = ros::Duration(msg_spline_.t[i].sec,msg_spline_.t[i].nsec).toSec();
+			knots(0,i) = normalize(tc, ts, te);
+			knots(1,i) = msg_spline_.x[i];
+			knots(2,i) = msg_spline_.y[i];
+			knots(3,i) = msg_spline_.z[i];
+			knots(4,i) = msg_spline_.yaw[i];
+		}
+
+		//Perform spline fitting
+		//	t values must be normalized [0, 1]
+		//	min is to ensure no more than cubic spline, but that we will also accept short vectors
+		spline_ = Eigen::SplineFitting<Spline5d>::Interpolate( knots, std::min<int>(knots.cols() - 1, 3));
+
+		publish_approx_spline( msg_spline_.header.frame_id,
+							   msg_spline_.header.stamp,
+							   ts,
+							   te,
+							   100,
+							   spline_);
 
 		if(!set_reference_used(TrackingRef::SPLINE, tc)) {
 			ROS_ERROR("Error changing tracking reference!");
@@ -371,6 +401,38 @@ void ContrailManager::publish_waypoint_reached( const std::string frame_id, cons
 	msg_out.progress = ((double)wp_c) / wp_num;
 
 	pub_discrete_progress_.publish(msg_out);
+}
+
+void ContrailManager::publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const double ts, const double te, const int steps, const Spline5d& s) {
+	nav_msgs::Path msg_out;
+
+	msg_out.header.frame_id = frame_id;
+	msg_out.header.stamp = stamp;
+
+	double t = ts;
+	double dt = (te - ts) / steps;
+	int i = 0;
+	while(t <= te) {
+		//Reticulate the data of the current time
+		Eigen::VectorXd r = s(normalize(t,ts,te));	//[time;X;Y;Z;yaw]
+
+		geometry_msgs::PoseStamped p;
+		p.header.frame_id = msg_out.header.frame_id;
+		p.header.stamp = ros::Time(t);
+		p.header.seq = i;
+
+		p.pose.position.x = r(1);
+		p.pose.position.y = r(2);
+		p.pose.position.z = r(3);
+		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(r(4)));
+
+		msg_out.poses.push_back(p);
+
+		t += dt;
+		i++;
+	}
+
+	pub_spline_approx_.publish(msg_out);
 }
 
 bool ContrailManager::callback_set_tracking( contrail_msgs::SetTracking::Request  &req,
@@ -486,6 +548,10 @@ double ContrailManager::yaw_from_quaternion( const Eigen::Quaterniond &q ) {
 	double siny = +2.0 * (q.w() * q.z() + q.x() * q.y());
 	double cosy = +1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z());
 	return std::atan2(siny, cosy);
+}
+
+Eigen::Quaterniond ContrailManager::quaternion_from_yaw( const double yaw ) {
+	return Eigen::Quaterniond( Eigen::AngleAxisd( yaw, Eigen::Vector3d::UnitZ() ) );
 }
 
 Eigen::Vector3d ContrailManager::position_from_msg(const geometry_msgs::Point &p) {

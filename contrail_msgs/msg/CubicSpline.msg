@@ -3,11 +3,12 @@ std_msgs/Header header
 # Spline Start Time
 # Defines the time when the spline should begin interpolation
 # If set to Time(0), the spline should start imidiately when recieved
-std_msgs/Time start_time
+time start_time
 
 # Time Vector
 # Knot vectors should be the same length as the time vector
-std_msgs/Duration[] t
+# Vector can be variably incrementing in time, but must maintain t(k) < t(k+1)
+time[] t
 
 # Knots
 float64[] x
