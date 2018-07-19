@@ -19,60 +19,8 @@
 #include <eigen3/Eigen/Dense>
 #include <eigen3/unsupported/Eigen/Splines>
 
-#ifdef DO_NO_USE
-#include <Eigen/Core>
-#include <unsupported/Eigen/Splines>
-
-#include <iostream>
-
-class SplineFunction {
-public:
-  SplineFunction(Eigen::VectorXd const &x_vec,
-                 Eigen::VectorXd const &y_vec)
-    : x_min(x_vec.minCoeff()),
-      x_max(x_vec.maxCoeff()),
-      // Spline fitting here. X values are scaled down to [0, 1] for this.
-      spline_(Eigen::SplineFitting<Eigen::Spline<double, 1>>::Interpolate(
-                y_vec.transpose(),
-                std::min<int>(x_vec.rows() - 1, 3),	//No more than cubic spline, but accept short vectors.
-                scaled_values(x_vec)))
-  { }
-
-  double operator()(double x) const {
-    // x values need to be scaled down in extraction as well.
-    return spline_(scaled_value(x))(0);
-  }
-
-private:
-  // Helpers to scale X values down to [0, 1]
-  double scaled_value(double x) const {
-    return (x - x_min) / (x_max - x_min);
-  }
-
-  Eigen::RowVectorXd scaled_values(Eigen::VectorXd const &x_vec) const {
-    return x_vec.unaryExpr([this](double x) { return scaled_value(x); }).transpose();
-  }
-
-  double x_min;
-  double x_max;
-
-  // Spline of one-dimensional "points."
-  Eigen::Spline<double, 1> spline_;
-};
-
-int main(int argc, char const* argv[])
-{
-  Eigen::VectorXd xvals(3);
-  Eigen::VectorXd yvals(xvals.rows());
-
-  xvals << 0, 15, 30;
-  yvals << 0, 12, 17;
-
-  SplineFunction s(xvals, yvals);
-
-  std::cout << s(12.34) << std::endl;
-}
-#endif
+#include <vector>
+#include <math.h>
 
 class ContrailManager {
 	public:
@@ -113,9 +61,10 @@ class ContrailManager {
 		Eigen::Spline spline_pz_;	//Position Z
 		Eigen::Spline spline_ry_;	//Yaw
 		*/
-		typedef Eigen::Spline<double,5> Spline5d;
-		typedef Eigen::Matrix<double,5,1> Vector5d;
-		Spline5d spline_;	//[time,X;Y;Z;yaw]
+		typedef Eigen::Spline<double,2> Spline2d;
+		typedef Eigen::Spline<double,4> Spline4d;
+		Spline4d spline_p_;	//[time;X;Y;Z]
+		Spline2d spline_r_;	//[time;yaw]
 
 		TrackingRef tracked_ref_;
 
@@ -171,7 +120,7 @@ class ContrailManager {
 		bool callback_set_tracking( contrail_msgs::SetTracking::Request &req, contrail_msgs::SetTracking::Response &res );
 
 		void publish_waypoint_reached( const std::string frame_id, const ros::Time t, const uint32_t wp_c, const uint32_t wp_num );
-		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Time& ts, const ros::Time& te, const int steps, const Spline5d& s);
+		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Duration& dur, const int steps, const Spline4d& sp, const Spline2d& sr);
 
 		//Returns true if the messages contain valid data
 		bool check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t );
@@ -198,19 +147,34 @@ class ContrailManager {
 		//Spline helper functions
 		//Get the interpolated point from the spline,
 		//	t should be the normalized time
-		inline void get_spline_reference(Vector5d& p_interp, Vector5d& v_interp, const double t) const {
+		inline void get_spline_reference(Eigen::Vector3d& p_interp, Eigen::Vector3d& v_interp, double& yaw, double& yaw_rate, const double t) const {
 			// x values need to be scaled down in extraction as well.
 			ROS_ASSERT_MSG((t >= 0.0) && (t <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
 
 			//We only want the 0th and 1st-order derivatives
-			const Eigen::Matrix<double,5,2> s = spline_.derivatives(t,1);
-			p_interp = s.block<5,1>(0,0);
-			v_interp = s.block<5,1>(0,1);
+			const Eigen::Matrix<double,4,2> sp = spline_p_.derivatives(t,1);
+			const Eigen::Matrix<double,2,2> sr = spline_r_.derivatives(t,1);
+			p_interp = sp.block<3,1>(1,0);
+			v_interp = sp.block<3,1>(1,1);
+			yaw = sr(1,0);
+			yaw_rate = sr(1,1);
 		}
 
 		// Helpers to scale X values down to [0, 1]
 		inline double normalize(double x, const double min, const double max) const {
 			return (x - min) / (max - min);
+		}
+
+		inline void make_yaw_continuous( std::vector<double>& yaw ) {
+			for(int i=1; i<yaw.size(); i++) {
+				while(fabs(yaw[i] - yaw[i-1]) > M_PI) {
+					if(yaw[i] > yaw[i-1]) {
+						yaw[i] -= 2*M_PI;
+					} else {
+						yaw[i] += 2*M_PI;
+					}
+				}
+			}
 		}
 
 		/*

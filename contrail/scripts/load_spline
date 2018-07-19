@@ -14,7 +14,7 @@ def timer_callback(e):
 	global timer
 
 	if e.current_real > rospy.Time(0):
-		if( rospy.has_param("~spline/k0/t") and \
+		if( rospy.has_param("~spline/duration") and \
 			rospy.has_param("~spline/k0/x") and \
 			rospy.has_param("~spline/k0/y") and \
 			rospy.has_param("~spline/k0/z") and \
@@ -30,15 +30,14 @@ def timer_callback(e):
 			msg_out.header.frame_id = rospy.get_param("~frame_id", "map")
 			msg_out.header.stamp = e.current_real
 			msg_out.start_time = rospy.Time.from_sec(0.0)
+			msg_out.duration = rospy.Duration(rospy.get_param("~spline/duration"))
 
 			i = 0
-			while( rospy.has_param("~spline/k%i/t" % (i)) and \
-				   rospy.has_param("~spline/k%i/x" % (i)) and \
+			while( rospy.has_param("~spline/k%i/x" % (i)) and \
 				   rospy.has_param("~spline/k%i/y" % (i)) and \
 				   rospy.has_param("~spline/k%i/z" % (i)) and \
 				   rospy.has_param("~spline/k%i/yaw" % (i)) ):
 
-				msg_out.t.append(rospy.Time.from_sec(rospy.get_param("~spline/k%i/t" % (i))))
 				msg_out.x.append(rospy.get_param("~spline/k%i/x" % (i)))
 				msg_out.y.append(rospy.get_param("~spline/k%i/y" % (i)))
 				msg_out.z.append(rospy.get_param("~spline/k%i/z" % (i)))

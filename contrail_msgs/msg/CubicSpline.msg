@@ -5,12 +5,11 @@ std_msgs/Header header
 # If set to Time(0), the spline should start imidiately when recieved
 time start_time
 
-# Time Vector
-# Knot vectors should be the same length as the time vector
-# Vector can be variably incrementing in time, but must maintain t(k) < t(k+1)
-duration[] t
+# Duration of the spline
+duration duration
 
 # Knots
+# Each knot is placed evenly throughout the duration of the spline
 float64[] x
 float64[] y
 float64[] z
