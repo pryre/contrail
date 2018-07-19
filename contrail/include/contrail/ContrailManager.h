@@ -113,8 +113,9 @@ class ContrailManager {
 		Eigen::Spline spline_pz_;	//Position Z
 		Eigen::Spline spline_ry_;	//Yaw
 		*/
-		typedef Eigen::Spline<double, 5> Spline5d;
-		Spline5d spline_;	//[time;X;Y;Z;yaw]
+		typedef Eigen::Spline<double,5> Spline5d;
+		typedef Eigen::Matrix<double,5,1> Vector5d;
+		Spline5d spline_;	//[time,X;Y;Z;yaw]
 
 		TrackingRef tracked_ref_;
 
@@ -170,7 +171,7 @@ class ContrailManager {
 		bool callback_set_tracking( contrail_msgs::SetTracking::Request &req, contrail_msgs::SetTracking::Response &res );
 
 		void publish_waypoint_reached( const std::string frame_id, const ros::Time t, const uint32_t wp_c, const uint32_t wp_num );
-		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const double ts, const double te, const int steps, const Spline5d& s);
+		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Time& ts, const ros::Time& te, const int steps, const Spline5d& s);
 
 		//Returns true if the messages contain valid data
 		bool check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t );
@@ -187,8 +188,8 @@ class ContrailManager {
 		double rotation_dist( const double a, const double b );
 
 		//Convinence functions for generating a position target from a pose
-		mavros_msgs::PositionTarget target_from_pose( const std::string& frame_id, const geometry_msgs::Pose& p );
-		mavros_msgs::PositionTarget target_from_pose( const std::string& frame_id, const Eigen::Affine3d& g );
+		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time, const std::string& frame_id, const geometry_msgs::Pose& p );
+		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time, const std::string& frame_id, const Eigen::Affine3d& g );
 
 		double yaw_from_quaternion( const geometry_msgs::Quaternion &q );
 		double yaw_from_quaternion( const Eigen::Quaterniond &q );
@@ -197,10 +198,14 @@ class ContrailManager {
 		//Spline helper functions
 		//Get the interpolated point from the spline,
 		//	t should be the normalized time
-		inline void get_spline_reference(Eigen::VectorXd& p_interp, Eigen::VectorXd& v_interp, const double t) const {
+		inline void get_spline_reference(Vector5d& p_interp, Vector5d& v_interp, const double t) const {
 			// x values need to be scaled down in extraction as well.
 			ROS_ASSERT_MSG((t >= 0.0) && (t <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
-			p_interp = spline_(t);
+
+			//We only want the 0th and 1st-order derivatives
+			const Eigen::Matrix<double,5,2> s = spline_.derivatives(t,1);
+			p_interp = s.block<5,1>(0,0);
+			v_interp = s.block<5,1>(0,1);
 		}
 
 		// Helpers to scale X values down to [0, 1]

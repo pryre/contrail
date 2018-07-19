@@ -8,7 +8,7 @@ time start_time
 # Time Vector
 # Knot vectors should be the same length as the time vector
 # Vector can be variably incrementing in time, but must maintain t(k) < t(k+1)
-time[] t
+duration[] t
 
 # Knots
 float64[] x

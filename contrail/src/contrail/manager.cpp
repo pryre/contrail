@@ -146,10 +146,86 @@ bool ContrailManager::get_spline_reference( mavros_msgs::PositionTarget &ref, co
 	bool success = true;
 
 	if( has_spline_reference(t) ) {
-		//TODO: Spline tracking
-			//Check time is within spline time
+		//Check time is within spline time, and handle cases where it's not
+		if( t < msg_spline_.start_time ) {
+			geometry_msgs::Pose hold;
+			hold.position.x = msg_spline_.x.front();
+			hold.position.y = msg_spline_.y.front();
+			hold.position.z = msg_spline_.z.front();
+			hold.orientation = quaternion_from_eig(quaternion_from_yaw(msg_spline_.yaw.front()));
+
+			ref = target_from_pose(t, msg_spline_.header.frame_id, hold);
+			ROS_INFO_THROTTLE(2.0, "[Contrail] Waiting for spline to start");
+		} else if( t > ( msg_spline_.start_time + msg_spline_.t.back() ) ) {
+			//We have finished the spline, but we haven't switched modes yet
+
+			//Just track the last knot
+			geometry_msgs::Pose hold;
+			hold.position.x = msg_spline_.x.back();
+			hold.position.y = msg_spline_.y.back();
+			hold.position.z = msg_spline_.z.back();
+			hold.orientation = quaternion_from_eig(quaternion_from_yaw(msg_spline_.yaw.back()));
+
+			//Output a final pose
+			ref = target_from_pose(t, msg_spline_.header.frame_id, hold);
+
+			//Spline has finished
+			if(param_fallback_to_pose_) {
+				geometry_msgs::PoseStamped ps;
+				ps.header.frame_id = msg_spline_.header.frame_id;
+				ps.header.stamp = t;
+				ps.pose = hold;
+
+				//Should never fail, but just in case
+				if(!set_discrete_pose_reference(ps, true) ) {
+					ROS_ERROR("[Contrail] Error changing fallback tracking reference!");
+				}
+			} else {
+				//Set back to no tracking
+				if(!set_reference_used(TrackingRef::NONE, t)) {
+					ROS_ERROR("[Contrail] Error changing tracking reference!");
+				}
+			}
+
+			ROS_INFO("[Contrail] Finished spline reference");
+		} else {
+			// Spline tracking
+			Vector5d p_interp = Vector5d::Zero();
+			Vector5d v_interp = Vector5d::Zero();
+
 			//Get normalized time
+			double t_norm = normalize((t - msg_spline_.start_time).toSec(), msg_spline_.t.front().toSec(), msg_spline_.t.back().toSec());
+
 			//Interpolate spline
+			get_spline_reference(p_interp, v_interp, t_norm);
+
+			ref.header.stamp = t;
+			ref.header.frame_id = msg_spline_.header.frame_id;
+
+			//Set up for a full trajectory reference
+			ref.coordinate_frame = ref.FRAME_LOCAL_NED;
+			ref.type_mask = ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ |
+							ref.FORCE;
+
+			ref.position.x = p_interp(1);
+			ref.position.y = p_interp(2);
+			ref.position.z = p_interp(3);
+			ref.yaw = p_interp(4);
+
+			ref.velocity.x = v_interp(1);
+			ref.velocity.y = v_interp(2);
+			ref.velocity.z = v_interp(3);
+			ref.yaw_rate = v_interp(4);
+
+			ref.acceleration_or_force.x = 0.0;
+			ref.acceleration_or_force.y = 0.0;
+			ref.acceleration_or_force.z = 0.0;
+		}
+
+		ROS_INFO("spline reference pos: [%0.2f;%0.2f;%0.2f]", ref.position.x, ref.position.y, ref.position.z);
+		ROS_INFO("spline reference vel: [%0.2f;%0.2f;%0.2f]", ref.velocity.x, ref.velocity.y, ref.velocity.z);
+
+		success = true;
 	}
 
 	return success;
@@ -196,16 +272,16 @@ bool ContrailManager::get_discrete_path_reference( mavros_msgs::PositionTarget &
 
 							//Should never fail, but just in case
 							if(!set_discrete_pose_reference(hold, true) ) {
-								ROS_ERROR("Error changing fallback tracking reference!");
+								ROS_ERROR("[Contrail] Error changing fallback tracking reference!");
 							}
 						} else {
 							//Set back to no tracking
 							if(!set_reference_used(TrackingRef::NONE, t)) {
-								ROS_ERROR("Error changing tracking reference!");
+								ROS_ERROR("[Contrail] Error changing tracking reference!");
 							}
 						}
 
-						ROS_INFO("Finished path reference");
+						ROS_INFO("[Contrail] Finished path reference");
 
 						//Reset the path tracking
 						path_c_ = 0;
@@ -219,7 +295,7 @@ bool ContrailManager::get_discrete_path_reference( mavros_msgs::PositionTarget &
 		}
 
 		if(success) {
-			ref = target_from_pose(msg_path_.header.frame_id, ps.pose);
+			ref = target_from_pose(t, msg_path_.header.frame_id, ps.pose);
 		}
 	}
 
@@ -247,7 +323,7 @@ bool ContrailManager::get_discrete_pose_reference( mavros_msgs::PositionTarget &
 						set_reference_used(TrackingRef::NONE, t);
 					}
 
-					ROS_INFO("Reached pose reference");
+					ROS_INFO("[Contrail] Reached pose reference");
 
 					//Set a flag to not bother checking waypoint later on
 					pose_reached_ = true;
@@ -259,7 +335,7 @@ bool ContrailManager::get_discrete_pose_reference( mavros_msgs::PositionTarget &
 			}
 		}
 
-		ref = target_from_pose(msg_pose_.header.frame_id, msg_pose_.pose);
+		ref = target_from_pose(t, msg_pose_.header.frame_id, msg_pose_.pose);
 		success = true;
 	}
 
@@ -283,39 +359,58 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 	ros::Time tc = ros::Time::now();
 
 	if( check_msg_spline(spline, tc) ) {
-		msg_spline_ = spline;
-		int num_knots = msg_spline_.t.size();
+		//Input is valid, no do a check of the actual values
+		ros::Time start_time = (spline.start_time == ros::Time(0)) ? ros::Time::now() : spline.start_time;
 
-		Eigen::MatrixXd knots(5,num_knots);
-		double ts = ros::Duration(msg_spline_.t[0].sec,msg_spline_.t[0].nsec).toSec();
-		double te = ros::Duration(msg_spline_.t[num_knots].sec,msg_spline_.t[num_knots].nsec).toSec();
-
-		for(int i=0; i<num_knots; i++) {
-			double tc = ros::Duration(msg_spline_.t[i].sec,msg_spline_.t[i].nsec).toSec();
-			knots(0,i) = normalize(tc, ts, te);
-			knots(1,i) = msg_spline_.x[i];
-			knots(2,i) = msg_spline_.y[i];
-			knots(3,i) = msg_spline_.z[i];
-			knots(4,i) = msg_spline_.yaw[i];
+		if( ( start_time + spline.t.back() ) > tc ) {
+			success = true;
+		} else {
+			ROS_WARN("[Contrail] Spline has already finished");
 		}
 
-		//Perform spline fitting
-		//	t values must be normalized [0, 1]
-		//	min is to ensure no more than cubic spline, but that we will also accept short vectors
-		spline_ = Eigen::SplineFitting<Spline5d>::Interpolate( knots, std::min<int>(knots.cols() - 1, 3));
+		if(success) {
+			msg_spline_ = spline;
+			msg_spline_.start_time = start_time;
 
-		publish_approx_spline( msg_spline_.header.frame_id,
-							   msg_spline_.header.stamp,
-							   ts,
-							   te,
-							   100,
-							   spline_);
+			int num_knots = msg_spline_.t.size();
+			Eigen::MatrixXd knots(5,num_knots);
+			double ts = msg_spline_.t.front().toSec();
+			double te = msg_spline_.t.back().toSec();
 
-		if(!set_reference_used(TrackingRef::SPLINE, tc)) {
-			ROS_ERROR("Error changing tracking reference!");
+			for(int i=0; i<num_knots; i++) {
+				double tc = ros::Duration(msg_spline_.t[i]).toSec();
+				knots(0,i) = normalize(tc,ts,te);
+				knots(1,i) = msg_spline_.x[i];
+				knots(2,i) = msg_spline_.y[i];
+				knots(3,i) = msg_spline_.z[i];
+				knots(4,i) = msg_spline_.yaw[i];
+			}
+
+			//Perform spline fitting
+			//	t values must be normalized [0, 1]
+			//	min is to ensure no more than cubic spline, but that we will also accept short vectors
+			spline_ = Eigen::SplineFitting<Spline5d>::Interpolate( knots, std::min<int>(knots.cols() - 1, 3));
+			//	Also define the derrivatives at the start and end of the spline to be 0 (to ensure a smooth start/end trajectory
+			/*
+			Eigen::MatrixXd deriv = Eigen::MatrixXd::Zero(5,2);
+			deriv(0,0) = knots(0,1);
+			deriv(0,1) =  (knots(0,num_knots-1) - knots(0,num_knots-2));
+
+			Eigen::VectorXi di(2);
+			di << 0, num_knots-1;
+			spline_ = Eigen::SplineFitting<Spline5d>::InterpolateWithDerivatives( knots, deriv, di, std::min<int>(knots.cols() - 1, 3));
+			*/
+			publish_approx_spline( msg_spline_.header.frame_id,
+								   msg_spline_.header.stamp,
+								   (msg_spline_.start_time + msg_spline_.t.front()),
+								   (msg_spline_.start_time + msg_spline_.t.back()),
+								   100,
+								   spline_);
+
+			if(!set_reference_used(TrackingRef::SPLINE, tc)) {
+				ROS_ERROR("[Contrail] Error changing tracking reference!");
+			}
 		}
-
-		success = true;
 	}
 
 	return success;
@@ -332,7 +427,7 @@ bool ContrailManager::set_discrete_path_reference( const nav_msgs::Path& path ) 
 
 		//Request a reference change, and ensure discrete progress update
 		if(!set_reference_used(TrackingRef::PATH, tc, true)) {
-			ROS_ERROR("Error changing tracking reference!");
+			ROS_ERROR("[Contrail] Error changing tracking reference!");
 		}
 
 		success = true;
@@ -352,7 +447,7 @@ bool ContrailManager::set_discrete_pose_reference( const geometry_msgs::PoseStam
 
 		//Request a reference change, and update discrete progress as long as it's not a fallback switch
 		if(!set_reference_used(TrackingRef::POSE, tc, !is_fallback)) {
-			ROS_ERROR("Error changing tracking reference!");
+			ROS_ERROR("[Contrail] Error changing tracking reference!");
 		}
 
 		success = true;
@@ -403,18 +498,18 @@ void ContrailManager::publish_waypoint_reached( const std::string frame_id, cons
 	pub_discrete_progress_.publish(msg_out);
 }
 
-void ContrailManager::publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const double ts, const double te, const int steps, const Spline5d& s) {
+void ContrailManager::publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Time& ts, const ros::Time& te, const int steps, const Spline5d& s) {
 	nav_msgs::Path msg_out;
 
 	msg_out.header.frame_id = frame_id;
 	msg_out.header.stamp = stamp;
 
-	double t = ts;
-	double dt = (te - ts) / steps;
+	double t = ts.toSec();
+	double dt = (te.toSec() - ts.toSec()) / steps;
 	int i = 0;
-	while(t <= te) {
+	while(t <= te.toSec()) {
 		//Reticulate the data of the current time
-		Eigen::VectorXd r = s(normalize(t,ts,te));	//[time;X;Y;Z;yaw]
+		Vector5d r = s(normalize(t,ts.toSec(),te.toSec()));	//[time;X;Y;Z;yaw]
 
 		geometry_msgs::PoseStamped p;
 		p.header.frame_id = msg_out.header.frame_id;
@@ -454,19 +549,11 @@ bool ContrailManager::callback_set_tracking( contrail_msgs::SetTracking::Request
 
 bool ContrailManager::check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t ) {
 	//TODO: Check spline time is recent/not finished
-	bool tvec_check = false;
-	bool xvec_check = false;
-	bool yvec_check = false;
-	bool zvec_check = false;
-	bool rvec_check = false;
-
-	if(spline.header.stamp > ros::Time(0)) {
-		tvec_check = (spline.t.size() > 0);
-		xvec_check = (spline.x.size() == spline.t.size());
-		yvec_check = (spline.y.size() == spline.t.size());
-		zvec_check = (spline.z.size() == spline.t.size());
-		rvec_check = (spline.yaw.size() == spline.t.size());
-	}
+	bool tvec_check = (spline.t.size() > 0) && (spline.header.stamp != ros::Time(0));
+	bool xvec_check = (spline.x.size() == spline.t.size());
+	bool yvec_check = (spline.y.size() == spline.t.size());
+	bool zvec_check = (spline.z.size() == spline.t.size());
+	bool rvec_check = (spline.yaw.size() == spline.t.size());
 
 	return (tvec_check && xvec_check &&  yvec_check &&  zvec_check && rvec_check);
 }
@@ -511,10 +598,10 @@ double ContrailManager::rotation_dist( const double a, const double b ) {
 	return (rad > M_PI) ? rad - M_PI : rad;
 }
 
-mavros_msgs::PositionTarget ContrailManager::target_from_pose( const std::string& frame_id, const geometry_msgs::Pose &p ) {
+mavros_msgs::PositionTarget ContrailManager::target_from_pose( const ros::Time& time, const std::string& frame_id, const geometry_msgs::Pose &p ) {
 	mavros_msgs::PositionTarget msg_out;
 
-	msg_out.header.stamp = ros::Time::now();
+	msg_out.header.stamp = time;
 	msg_out.header.frame_id = frame_id;
 
 	msg_out.coordinate_frame = msg_out.FRAME_LOCAL_NED;
@@ -536,8 +623,8 @@ mavros_msgs::PositionTarget ContrailManager::target_from_pose( const std::string
 	return msg_out;
 }
 
-mavros_msgs::PositionTarget ContrailManager::target_from_pose( const std::string& frame_id, const Eigen::Affine3d &g ) {
-	return target_from_pose( frame_id, pose_from_eig(g) );
+mavros_msgs::PositionTarget ContrailManager::target_from_pose( const ros::Time& time, const std::string& frame_id, const Eigen::Affine3d &g ) {
+	return target_from_pose( time, frame_id, pose_from_eig(g) );
 }
 
 double ContrailManager::yaw_from_quaternion( const geometry_msgs::Quaternion &q ) {
