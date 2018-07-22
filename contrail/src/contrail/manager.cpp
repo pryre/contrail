@@ -45,6 +45,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nh, const bool use_init_pose, 
 
 	pub_discrete_progress_ = nhp_.advertise<contrail_msgs::PathProgress>( "feedback/contrail/discrete_progress", 10 );
 	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "feedback/contrail/spline_approximation", 10 );
+	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "feedback/contrail/spline_points", 10 );
 
 	srv_set_tracking_ = nhp_.advertiseService("contrail/set_tracking", &ContrailManager::callback_set_tracking, this);
 
@@ -375,7 +376,7 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 			msg_spline_.start_time = start_time;
 
 			make_yaw_continuous(msg_spline_.yaw);
-
+			/*
 			int num_knots = msg_spline_.x.size();
 			Eigen::MatrixXd pknots(4,num_knots);
 			Eigen::MatrixXd rknots(2,num_knots);
@@ -393,8 +394,28 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 			//	t values must be normalized [0, 1]
 			//	min is to ensure no more than cubic spline, but that we will also accept short vectors
 			spline_p_ = Eigen::SplineFitting<Spline4d>::Interpolate( pknots, std::min<int>(pknots.cols() - 1, 3));
-			spline_r_ = Eigen::SplineFitting<Spline2d>::Interpolate( rknots, std::min<int>(rknots.cols() - 1, 3));
+			spline_r_ = Eigen::SplineFitting<Spline2d>::Interpolate( rknots, std::min<int>(rknots.cols() - 1, 1));
+			*/
+			spline_x_ = tinyspline::Utils::interpolateCubic(&spline.x, 1);
+			spline_y_ = tinyspline::Utils::interpolateCubic(&spline.y, 1);
+			spline_z_ = tinyspline::Utils::interpolateCubic(&spline.z, 1);
+			spline_yaw_ = tinyspline::Utils::interpolateCubic(&spline.yaw, 1);
 
+			//spline_xd_ = spline_x_.derive();
+			//spline_yd_ = spline_y_.derive();
+			//spline_zd_ = spline_z_.derive();
+			//spline_yawd_ = spline_yaw_.derive();
+			/*
+			for(int i=0; i<=100; i++) {
+				double u = ((double)i)/100;
+				double result = tspline_(u).result()[0];
+				Eigen::Vector2d yaw = spline_r_(u);
+				ROS_INFO("yaw_s(%0.2f): %0.2f", u, yaw[1]);
+				ROS_INFO("yaw_t(%0.2f): %0.2f", u, result);
+				//for(int j=0; j<=result.size(); j++)
+				//	ROS_INFO("\t%0.2f", result[j]);
+			}
+			*/
 			//	Also define the derrivatives at the start and end of the spline to be 0 (to ensure a smooth start/end trajectory
 			/*
 			Eigen::MatrixXd deriv = Eigen::MatrixXd::Zero(4,num_knots);
@@ -418,9 +439,13 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 			publish_approx_spline( msg_spline_.header.frame_id,
 								   msg_spline_.start_time,
 								   msg_spline_.duration,
-								   100,
-								   spline_p_,
-								   spline_r_);
+								   param_spline_approx_res_,
+								   spline_x_,
+								   spline_y_,
+								   spline_z_,
+								   spline_yaw_ );
+
+		   publish_spline_points( msg_spline_ );
 
 			if(!set_reference_used(TrackingRef::SPLINE, tc)) {
 				ROS_ERROR("[Contrail] Error changing tracking reference!");
@@ -481,6 +506,7 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_hold_duration_ = ros::Duration(config.waypoint_hold_duration);
 	param_dsp_radius_ = config.waypoint_radius;
 	param_dsp_yaw_ = config.waypoint_yaw_accuracy;
+	param_spline_approx_res_ = config.spline_approximate_resoultion;
 }
 
 void ContrailManager::callback_spline( const contrail_msgs::CubicSpline::ConstPtr& msg_in ) {
@@ -501,7 +527,10 @@ void ContrailManager::callback_discrete_pose( const geometry_msgs::PoseStamped::
 	}
 }
 
-void ContrailManager::publish_waypoint_reached( const std::string frame_id, const ros::Time t, const uint32_t wp_c, const uint32_t wp_num ) {
+void ContrailManager::publish_waypoint_reached( const std::string frame_id,
+												const ros::Time t,
+												const uint32_t wp_c,
+												const uint32_t wp_num ) {
 	contrail_msgs::PathProgress msg_out;
 
 	msg_out.header.frame_id = frame_id;
@@ -513,7 +542,14 @@ void ContrailManager::publish_waypoint_reached( const std::string frame_id, cons
 	pub_discrete_progress_.publish(msg_out);
 }
 
-void ContrailManager::publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Duration& dur, const int steps, const Spline4d& sp, const Spline2d& sr) {
+void ContrailManager::publish_approx_spline( const std::string frame_id,
+											 const ros::Time& stamp,
+											 const ros::Duration& dur,
+											 const int steps,
+											 const tinyspline::BSpline& sx,
+											 const tinyspline::BSpline& sy,
+											 const tinyspline::BSpline& sz,
+											 const tinyspline::BSpline& syaw ) {
 	nav_msgs::Path msg_out;
 
 	msg_out.header.frame_id = frame_id;
@@ -524,18 +560,24 @@ void ContrailManager::publish_approx_spline( const std::string frame_id, const r
 	int i = 0;
 	for(int i=0; i<(steps+1); i++) {
 		//Reticulate the data of the current time
-		Eigen::Vector4d rp = sp(normalize(i,0,steps));	//[X;Y;Z]
-		Eigen::Vector2d rr = sr(normalize(i,0,steps));	//[yaw]
+		double u = normalize(i,0,steps);
+		std::vector<tinyspline::real> x = spline_x_(u).result();
+		std::vector<tinyspline::real> y = spline_y_(u).result();
+		std::vector<tinyspline::real> z = spline_z_(u).result();
+		std::vector<tinyspline::real> yaw = spline_yaw_(u).result();
+
+		//Eigen::Vector4d rp = sp(u);	//[X;Y;Z]
+		//Eigen::Vector2d rr = sr(u);	//[yaw]
 
 		geometry_msgs::PoseStamped p;
 		p.header.frame_id = msg_out.header.frame_id;
 		p.header.stamp = t;
 		p.header.seq = i;
 
-		p.pose.position.x = rp(1);
-		p.pose.position.y = rp(2);
-		p.pose.position.z = rp(3);
-		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(rr(1)));
+		p.pose.position.x = x[0];
+		p.pose.position.y = y[0];
+		p.pose.position.z = z[0];
+		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(yaw[0]));
 
 		msg_out.poses.push_back(p);
 
@@ -543,6 +585,30 @@ void ContrailManager::publish_approx_spline( const std::string frame_id, const r
 	}
 
 	pub_spline_approx_.publish(msg_out);
+}
+
+void ContrailManager::publish_spline_points( const contrail_msgs::CubicSpline& spline ) {
+	nav_msgs::Path msg_out;
+
+	msg_out.header = spline.header;
+
+	double dt = spline.duration.toSec() / (spline.x.size() - 1);
+
+	for(int i=0; i<spline.x.size(); i++) {
+		geometry_msgs::PoseStamped p;
+		p.header.frame_id = msg_out.header.frame_id;
+		p.header.stamp = spline.start_time + ros::Duration(dt*i);
+		p.header.seq = i;
+
+		p.pose.position.x = spline.x[i];
+		p.pose.position.y = spline.y[i];
+		p.pose.position.z = spline.z[i];
+		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(spline.yaw[i]));
+
+		msg_out.poses.push_back(p);
+	}
+
+	pub_spline_points_.publish(msg_out);
 }
 
 bool ContrailManager::callback_set_tracking( contrail_msgs::SetTracking::Request  &req,

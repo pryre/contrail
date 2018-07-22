@@ -106,7 +106,7 @@ generate_dynamic_reconfigure_options(
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-  INCLUDE_DIRS include
+  INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
   LIBRARIES ${PROJECT_NAME}_manager
   CATKIN_DEPENDS contrail_msgs
   DEPENDS EIGEN3
@@ -125,6 +125,12 @@ include_directories(
 )
 
 ## Declare a C++ library
+add_library(${PROJECT_NAME}_tinysplinec
+  src/${PROJECT_NAME}/tinyspline.c
+)
+add_library(${PROJECT_NAME}_tinysplinecpp
+  src/${PROJECT_NAME}/tinysplinecpp.cpp
+)
 add_library(${PROJECT_NAME}_manager
   src/${PROJECT_NAME}/manager.cpp
 )
@@ -139,6 +145,9 @@ add_library(${PROJECT_NAME}_guidance
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
+add_dependencies(${PROJECT_NAME}_tinysplinec ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME}_tinysplinecpp ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
 add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 add_dependencies(${PROJECT_NAME}_guidance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 #add_dependencies(${PROJECT_NAME}_path_extract ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
@@ -159,7 +168,17 @@ add_executable(${PROJECT_NAME}_guidance_node src/guidance_node.cpp)
 add_dependencies(${PROJECT_NAME}_guidance_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
+target_link_libraries(${PROJECT_NAME}_tinysplinec
+  ${catkin_LIBRARIES}
+)
+
+target_link_libraries(${PROJECT_NAME}_tinysplinecpp
+  ${PROJECT_NAME}_tinysplinec
+  ${catkin_LIBRARIES}
+)
+
 target_link_libraries(${PROJECT_NAME}_manager
+  ${PROJECT_NAME}_tinysplinecpp
   ${catkin_LIBRARIES}
 )
 

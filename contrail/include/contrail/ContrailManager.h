@@ -14,10 +14,11 @@
 #include <contrail_msgs/SetTracking.h>
 #include <contrail/ManagerParamsConfig.h>
 
+#include <contrail/tinysplinecpp.h>
+
 #include <mavros_msgs/PositionTarget.h>
 
 #include <eigen3/Eigen/Dense>
-#include <eigen3/unsupported/Eigen/Splines>
 
 #include <vector>
 #include <math.h>
@@ -40,6 +41,7 @@ class ContrailManager {
 
 		ros::Publisher pub_discrete_progress_;	//Publishes the current path index when a discrete setpoint is reached
 		ros::Publisher pub_spline_approx_;	//Publishes a approximate visualization of the calculated spline as feedback
+		ros::Publisher pub_spline_points_;	//Publishes a path representing the interpolated spline points
 
 		ros::ServiceServer srv_set_tracking_;
 		dynamic_reconfigure::Server<contrail::ManagerParamsConfig> dyncfg_settings_;
@@ -55,27 +57,44 @@ class ContrailManager {
 		ros::Duration param_hold_duration_;
 		double param_dsp_radius_;
 		double param_dsp_yaw_;
+		double param_spline_approx_res_;
 		/*
 		Eigen::Spline spline_px_;	//Position X
 		Eigen::Spline spline_py_;	//Position Y
 		Eigen::Spline spline_pz_;	//Position Z
 		Eigen::Spline spline_ry_;	//Yaw
 		*/
-		typedef Eigen::Spline<double,2> Spline2d;
-		typedef Eigen::Spline<double,4> Spline4d;
-		Spline4d spline_p_;	//[time;X;Y;Z]
-		Spline2d spline_r_;	//[time;yaw]
+		//typedef Eigen::Spline<double,2> Spline2d;
+		//typedef Eigen::Spline<double,4> Spline4d;
+		//Spline4d spline_p_;	//[time;X;Y;Z]
+		//Spline2d spline_r_;	//[time;yaw]
+
+		tinyspline::BSpline spline_x_;
+		tinyspline::BSpline spline_y_;
+		tinyspline::BSpline spline_z_;
+		tinyspline::BSpline spline_yaw_;
+		/*
+		//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
+		tinyspline::BSpline spline_xd_;
+		tinyspline::BSpline spline_yd_;
+		tinyspline::BSpline spline_zd_;
+		tinyspline::BSpline spline_yawd_;
+		*/
 
 		TrackingRef tracked_ref_;
 
 	public:
-		ContrailManager( ros::NodeHandle nh, const bool use_init_pose = false, const Eigen::Affine3d init_pose = Eigen::Affine3d::Identity() );
+		ContrailManager( ros::NodeHandle nh,
+						 const bool use_init_pose = false,
+						 const Eigen::Affine3d init_pose = Eigen::Affine3d::Identity() );
 
 		~ContrailManager( void );
 
 		//Allows control over the tracked reference
 		TrackingRef get_reference_used( void );
-		bool set_reference_used( TrackingRef state, const ros::Time t, const bool update_dsp_progress = false );
+		bool set_reference_used( TrackingRef state,
+								 const ros::Time t,
+								 const bool update_dsp_progress = false );
 
 		//Returns the indicated reference can currently be tracked
 		//has_reference() can be used to wait for an initial setpoint
@@ -86,29 +105,43 @@ class ContrailManager {
 
 		//Gets the current reference from the latest updated source
 		//Returns true if the reference was successfully obtained
-		bool get_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const geometry_msgs::Pose &p_c );
+		bool get_reference( mavros_msgs::PositionTarget &ref,
+							const ros::Time t,
+							const geometry_msgs::Pose &p_c );
 
 		//Gets the current reference from the spline source
 		//Returns true if the reference was successfully obtained
-		bool get_spline_reference( mavros_msgs::PositionTarget &ref, const ros::Time t );
+		bool get_spline_reference( mavros_msgs::PositionTarget &ref,
+								   const ros::Time t );
 
 		//Gets the current reference from the discrete path source
 		//Returns true if the reference was successfully obtained
-		bool get_discrete_path_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const geometry_msgs::Pose &p_c );
+		bool get_discrete_path_reference( mavros_msgs::PositionTarget &ref,
+										  const ros::Time t,
+										  const geometry_msgs::Pose &p_c );
 
 		//Gets the current reference from the discrete pose source
 		//Returns true if the reference was successfully obtained
-		bool get_discrete_pose_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const geometry_msgs::Pose &p_c );
+		bool get_discrete_pose_reference( mavros_msgs::PositionTarget &ref,
+										  const ros::Time t,
+										  const geometry_msgs::Pose &p_c );
 
 		//Convinience versions of the get*reference();
-		bool get_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const Eigen::Affine3d &g_c );
-		bool get_discrete_path_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const Eigen::Affine3d &g_c );
-		bool get_discrete_pose_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const Eigen::Affine3d &g_c );
+		bool get_reference( mavros_msgs::PositionTarget &ref,
+							const ros::Time t,
+							const Eigen::Affine3d &g_c );
+		bool get_discrete_path_reference( mavros_msgs::PositionTarget &ref,
+										  const ros::Time t,
+										  const Eigen::Affine3d &g_c );
+		bool get_discrete_pose_reference( mavros_msgs::PositionTarget &ref,
+										  const ros::Time t,
+										  const Eigen::Affine3d &g_c );
 
 		//Allows the trackings to be set directly rather than by callback
 		bool set_spline_reference( const contrail_msgs::CubicSpline& spline );
 		bool set_discrete_path_reference( const nav_msgs::Path& path );
-		bool set_discrete_pose_reference( const geometry_msgs::PoseStamped& pose, const bool is_fallback = false );
+		bool set_discrete_pose_reference( const geometry_msgs::PoseStamped& pose,
+										  const bool is_fallback = false );
 
 	private:
 		//ROS callbacks
@@ -117,10 +150,22 @@ class ContrailManager {
 		void callback_spline( const contrail_msgs::CubicSpline::ConstPtr& msg_in );
 		void callback_discrete_path( const nav_msgs::Path::ConstPtr& msg_in );
 		void callback_discrete_pose( const geometry_msgs::PoseStamped::ConstPtr& msg_in );
-		bool callback_set_tracking( contrail_msgs::SetTracking::Request &req, contrail_msgs::SetTracking::Response &res );
+		bool callback_set_tracking( contrail_msgs::SetTracking::Request &req,
+									contrail_msgs::SetTracking::Response &res );
 
-		void publish_waypoint_reached( const std::string frame_id, const ros::Time t, const uint32_t wp_c, const uint32_t wp_num );
-		void publish_approx_spline( const std::string frame_id, const ros::Time& stamp, const ros::Duration& dur, const int steps, const Spline4d& sp, const Spline2d& sr);
+		void publish_waypoint_reached( const std::string frame_id,
+									   const ros::Time t,
+									   const uint32_t wp_c,
+									   const uint32_t wp_num );
+		void publish_approx_spline( const std::string frame_id,
+									const ros::Time& stamp,
+									const ros::Duration& dur,
+									const int steps,
+									const tinyspline::BSpline& sx,
+									const tinyspline::BSpline& sy,
+									const tinyspline::BSpline& sz,
+									const tinyspline::BSpline& syaw );
+		void publish_spline_points( const contrail_msgs::CubicSpline& spline );
 
 		//Returns true if the messages contain valid data
 		bool check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t );
@@ -128,7 +173,10 @@ class ContrailManager {
 		bool check_msg_pose(const geometry_msgs::PoseStamped& pose );
 
 		//Returns true of the tracking point has been reached
-		bool check_waypoint_reached( const Eigen::Vector3d& pos_s, const double yaw_s, const Eigen::Vector3d& pos_c, const double yaw_c );
+		bool check_waypoint_reached( const Eigen::Vector3d& pos_s,
+									 const double yaw_s,
+									 const Eigen::Vector3d& pos_c,
+									 const double yaw_c );
 		bool check_waypoint_complete( const ros::Time t );
 		void reset_waypoint_timer( void );
 
@@ -137,8 +185,12 @@ class ContrailManager {
 		double rotation_dist( const double a, const double b );
 
 		//Convinence functions for generating a position target from a pose
-		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time, const std::string& frame_id, const geometry_msgs::Pose& p );
-		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time, const std::string& frame_id, const Eigen::Affine3d& g );
+		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time,
+													  const std::string& frame_id,
+													  const geometry_msgs::Pose& p );
+		mavros_msgs::PositionTarget target_from_pose( const ros::Time& time,
+													  const std::string& frame_id,
+													  const Eigen::Affine3d& g );
 
 		double yaw_from_quaternion( const geometry_msgs::Quaternion &q );
 		double yaw_from_quaternion( const Eigen::Quaterniond &q );
@@ -147,6 +199,7 @@ class ContrailManager {
 		//Spline helper functions
 		//Get the interpolated point from the spline,
 		//	t should be the normalized time
+		/*
 		inline void get_spline_reference(Eigen::Vector3d& p_interp, Eigen::Vector3d& v_interp, double& yaw, double& yaw_rate, const double t) const {
 			// x values need to be scaled down in extraction as well.
 			ROS_ASSERT_MSG((t >= 0.0) && (t <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
@@ -158,6 +211,56 @@ class ContrailManager {
 			v_interp = sp.block<3,1>(1,1);
 			yaw = sr(1,0);
 			yaw_rate = sr(1,1);
+		}
+		*/
+		inline void get_spline_reference(Eigen::Vector3d& p_interp,
+										 Eigen::Vector3d& v_interp,
+										 double& yaw,
+										 double& yaw_rate,
+										 const double u) const {
+			// x values need to be scaled down in extraction as well.
+			ROS_ASSERT_MSG((u >= 0.0) && (u <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
+
+
+			std::vector<tinyspline::real> vx = spline_x_(u).result();
+			std::vector<tinyspline::real> vy = spline_y_(u).result();
+			std::vector<tinyspline::real> vz = spline_z_(u).result();
+			std::vector<tinyspline::real> vyaw = spline_yaw_(u).result();
+
+			p_interp = Eigen::Vector3d(vx[0],vy[0],vz[0]);
+			yaw = vyaw[0];
+
+			/*
+			std::vector<tinyspline::real> vxd = spline_xd_(u).result();
+			std::vector<tinyspline::real> vyd = spline_yd_(u).result();
+			std::vector<tinyspline::real> vzd = spline_zd_(u).result();
+			std::vector<tinyspline::real> vyawd = spline_yawd_(u).result();
+
+			v_interp = Eigen::Vector3d(vxd[0],vyd[0],vzd[0]);
+			yaw_rate = vyawd[0];
+			*/
+
+			//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
+			double dt = 0.02;
+			//Shorten time to ensure that 0.0<=u<=1.0 is preserved
+			double ul = u - dt;
+			double uh = u + dt;
+			ul = (ul >= 0.0) ? ul : 0.0;
+			uh = (uh <= 1.0) ? uh : 1.0;
+
+			std::vector<tinyspline::real> vxdl = spline_x_(ul).result();
+			std::vector<tinyspline::real> vydl = spline_y_(ul).result();
+			std::vector<tinyspline::real> vzdl = spline_z_(ul).result();
+			std::vector<tinyspline::real> vyawdl = spline_yaw_(ul).result();
+			std::vector<tinyspline::real> vxdh = spline_x_(uh).result();
+			std::vector<tinyspline::real> vydh = spline_y_(uh).result();
+			std::vector<tinyspline::real> vzdh = spline_z_(uh).result();
+			std::vector<tinyspline::real> vyawdh = spline_yaw_(uh).result();
+
+			v_interp.x() = (vxdh[0] - vxdl[0]) / (2*dt);
+			v_interp.y() = (vydh[0] - vydl[0]) / (2*dt);
+			v_interp.z() = (vzdh[0] - vzdl[0]) / (2*dt);
+			yaw_rate = (vyawdh[0] - vyawdl[0]) / (2*dt);
 		}
 
 		// Helpers to scale X values down to [0, 1]
