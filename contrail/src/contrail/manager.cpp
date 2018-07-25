@@ -439,7 +439,7 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 			publish_approx_spline( msg_spline_.header.frame_id,
 								   msg_spline_.start_time,
 								   msg_spline_.duration,
-								   (int)(msg_spline_.duration*param_spline_approx_res_),
+								   (int)(msg_spline_.duration.toSec()*param_spline_approx_res_),
 								   spline_x_,
 								   spline_y_,
 								   spline_z_,
