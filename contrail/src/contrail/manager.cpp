@@ -439,7 +439,7 @@ bool ContrailManager::set_spline_reference( const contrail_msgs::CubicSpline& sp
 			publish_approx_spline( msg_spline_.header.frame_id,
 								   msg_spline_.start_time,
 								   msg_spline_.duration,
-								   param_spline_approx_res_,
+								   (int)(msg_spline_.duration*param_spline_approx_res_),
 								   spline_x_,
 								   spline_y_,
 								   spline_z_,
@@ -506,7 +506,7 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_hold_duration_ = ros::Duration(config.waypoint_hold_duration);
 	param_dsp_radius_ = config.waypoint_radius;
 	param_dsp_yaw_ = config.waypoint_yaw_accuracy;
-	param_spline_approx_res_ = config.spline_approximate_resoultion;
+	param_spline_approx_res_ = config.spline_res_per_sec;
 }
 
 void ContrailManager::callback_spline( const contrail_msgs::CubicSpline::ConstPtr& msg_in ) {
