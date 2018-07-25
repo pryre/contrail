@@ -9,11 +9,11 @@ sudo apt install ros-kinetic-nav-msgs ros-kinetic-geometry-msgs ros-kinetic-mavr
 
 ## Basic Functionallity
 A selection of nodes have been provided to allow for most users to run directly to get access to the functionallity that contrail offers. Once the package is compiled, each can be run with: `rosrun contrail NODENAME`. Additionally, launch file examples for all nodes have been provided for each node. These nodes are:
-- `contrail_guidance_node`:
-- `load_waypoints`:
-- `load_spline`:
-- `converter_waypoints_path`:
-- `converter_path_spline`:
+- `contrail_guidance_node`: A simple example of a UAV guidance node using contrail
+- `load_waypoints`: Loads a waypoint list from a file and transmits them on a topic
+- `load_spline`: Loads a spline definition from a file and transmits it as a topic
+- `converter_waypoints_path`: Converts a `contrail_msgs/WaypointList` to a `nav_msgs/Path` message
+- `converter_path_spline`: Converts a `nav_msgs/Path` to a `contrail_msgs/CubicSpline` message
 - Additionally, a few test scripts are also provided: `test_pose`, `test_path`, and `test_wapoints`.
 
 ## Interfacing
@@ -50,9 +50,17 @@ Lastly, some additional functionallity can be set via other parameters:
 - `contrail/spline_res_per_sec`: Sets how many spline approximation points are used over the duration of the path per second
 
 ## Typical Usage
-A typical use case of contrail would be to track a pre-plannedd set of discrete waypoints. When a new reference is recieved, contrail will automatically switch to tracking the new reference. However, this does not necessarily mean the previously tracked reference is discarded.
+A typical use case of contrail would be to track a pre-plannedd set of discrete waypoints. When a new reference is recieved, contrail will automatically switch to tracking the new reference, overiding any previously received reference of that type. However, this does not necessarily mean a different previous reference is discarded.
 
-
+For example, the process from the view of a high-level navigation planner may be:
+1. Send an initial pose reference to contrail
+2. When the `~feedback/contrail/discrete_progress` message is sent back (indicating that the initial pose was reached), send a discrete path reference to contrail
+3. (contrail switches tracking to the discrete path)
+4. Half-way through the path, the navigation planner decides to detour, and sends a detour pose to contrail
+5. (contrail switches tracking to the detour pose, which overides the initial pose)
+6. When the `~feedback/contrail/discrete_progress` message is sent back (indicating that the detour pose was reached), the navigation planner uses the `~/contrail/set_tracking` service to switch back to path tracking
+7. (contrail switches back to discrete path tracking, resuming the discrete path where it left off)
+8. (contrail finishes tracking the discrete path, and switches to pose tracking at the final point on the path, overriding the detour pose)
 
 ## Developer Functionallity
 (Coming soon...)
