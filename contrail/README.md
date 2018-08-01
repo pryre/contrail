@@ -65,8 +65,8 @@ For example, the process from the view of a high-level navigation planner may be
 ## Spline Generation
 (Coming soon...)
 
-![Spline vs. Time](https://raw.githubusercontent.com/qutas/contrail/contrail/master/resources/spline_vs_time.png)
-![Spacial Spline](https://raw.githubusercontent.com/qutas/contrail/contrail/master/resources/spline_space.png)
+![Spline vs. Time](resources/spline_vs_time.png)
+![Spacial Spline](resources/spline_space.png)
 
 ## Developer Functionallity
 (Coming soon...)
