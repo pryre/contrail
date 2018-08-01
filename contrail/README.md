@@ -62,5 +62,11 @@ For example, the process from the view of a high-level navigation planner may be
 7. (contrail switches back to discrete path tracking, resuming the discrete path where it left off)
 8. (contrail finishes tracking the discrete path, and switches to pose tracking at the final point on the path, overriding the detour pose)
 
+## Spline Generation
+(Coming soon...)
+
+![Spline vs. Time](https://raw.githubusercontent.com/qutas/contrail/contrail/master/resources/spline_vs_time.png)
+![Spacial Spline](https://raw.githubusercontent.com/qutas/contrail/contrail/master/resources/spline_space.png)
+
 ## Developer Functionallity
 (Coming soon...)
