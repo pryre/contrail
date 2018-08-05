@@ -629,7 +629,6 @@ bool ContrailManager::callback_set_tracking( contrail_msgs::SetTracking::Request
 }
 
 bool ContrailManager::check_msg_spline(const contrail_msgs::CubicSpline& spline, const ros::Time t ) {
-	//TODO: Check spline time is recent/not finished
 	bool t_check = (spline.header.stamp != ros::Time(0)) && (spline.duration > ros::Duration(0));
 	bool xvec_check = (spline.x.size() > 0);
 	bool yvec_check = (spline.y.size() == spline.x.size());

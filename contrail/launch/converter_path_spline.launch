@@ -3,7 +3,7 @@
 	<node pkg="contrail" type="converter_path_spline" name="path_converter" clear_params="true" output="screen">
 		<param name="speed" value="0.2"/>
 
-		<remap from="path_converter/path" to="/path" />
-		<remap from="path_converter/spline" to="/spline" />
+		<remap from="~path" to="/path" />
+		<remap from="~spline" to="/spline" />
 	</node>
 </launch>

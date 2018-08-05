@@ -12,6 +12,6 @@
 		<param name="contrail/waypoint_yaw_accuracy" value="0.1" />
 
 		<!--remap from="guidance/command/triplet" to="/triplet" /-->
-		<remap from="guidance/state/odom" to="/odom" />
+		<remap from="~state/odom" to="/odom" />
 	</node>
 </launch>

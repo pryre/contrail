@@ -5,6 +5,6 @@
 	<node pkg="contrail" type="load_waypoints" name="load_waypoints" clear_params="true" output="screen">
 		<param name="frame_id" value="map" />
 
-		<rosparam command="load" file="$(find contrail)/paths/$(arg wp_name).yaml"/>
+		<rosparam command="load" file="$(find contrail)/waypoints/$(arg wp_name).yaml"/>
 	</node>
 </launch>
