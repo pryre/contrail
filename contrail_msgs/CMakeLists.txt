@@ -17,7 +17,7 @@ add_service_files(FILES
 
 add_message_files(FILES
 	CubicSpline.msg
-	PathProgress.msg
+	DiscreteProgress.msg
 	Waypoint.msg
 	WaypointList.msg
 )

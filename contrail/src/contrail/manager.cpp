@@ -10,7 +10,7 @@
 #include <geometry_msgs/Quaternion.h>
 
 #include <contrail_msgs/CubicSpline.h>
-#include <contrail_msgs/PathProgress.h>
+#include <contrail_msgs/DiscreteProgress.h>
 #include <contrail_msgs/SetTracking.h>
 #include <contrail/ManagerParamsConfig.h>
 
@@ -43,7 +43,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nh, const bool use_init_pose, 
 	sub_path_ = nhp_.subscribe<nav_msgs::Path>( "reference/contrail/path", 10, &ContrailManager::callback_discrete_path, this );
 	sub_pose_ = nhp_.subscribe<geometry_msgs::PoseStamped>( "reference/contrail/pose", 10, &ContrailManager::callback_discrete_pose, this );
 
-	pub_discrete_progress_ = nhp_.advertise<contrail_msgs::PathProgress>( "feedback/contrail/discrete_progress", 10 );
+	pub_discrete_progress_ = nhp_.advertise<contrail_msgs::DiscreteProgress>( "feedback/contrail/discrete_progress", 10 );
 	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "feedback/contrail/spline_approximation", 10 );
 	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "feedback/contrail/spline_points", 10 );
 
@@ -531,7 +531,7 @@ void ContrailManager::publish_waypoint_reached( const std::string frame_id,
 												const ros::Time t,
 												const uint32_t wp_c,
 												const uint32_t wp_num ) {
-	contrail_msgs::PathProgress msg_out;
+	contrail_msgs::DiscreteProgress msg_out;
 
 	msg_out.header.frame_id = frame_id;
 	msg_out.header.stamp = t;
