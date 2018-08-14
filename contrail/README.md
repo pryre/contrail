@@ -1,10 +1,21 @@
 # contrail
 A collection of nodes and libraries to generate and track discrete or velocity-dependant trajectories in 3D space.
 
-## Dependencies
+## Installation
+
+#### Dependencies
 The following ROS and system dependencies are required to compile this package:
 ```sh
 sudo apt install ros-kinetic-nav-msgs ros-kinetic-geometry-msgs ros-kinetic-mavros-msgs ros-kinetic-message-generation ros-kinetic-dynamic-reconfigure libeigen3-dev
+```
+
+#### Download & Compile
+```sh
+cd ~/catkin_ws/src
+git clone https://github.com/qutas/contrail
+cd ~/catkin_ws
+catkin_make
+source ~/catkin_ws/devel/setup.bash
 ```
 
 ## Basic Functionallity
