@@ -18,6 +18,13 @@ catkin_make
 source ~/catkin_ws/devel/setup.bash
 ```
 
+#### Updating
+```sh
+cd ~/catkin_ws/src/contrail
+git pull
+cd ~/catkin_ws/
+catkin_make
+
 ## Basic Functionallity
 A selection of nodes have been provided to allow for most users to run directly to get access to the functionallity that contrail offers. Once the package is compiled, each can be run with: `rosrun contrail NODENAME`. Additionally, launch file examples for all nodes have been provided for each node. These nodes are:
 - `contrail_guidance_node`: A simple example of a UAV guidance node using contrail
