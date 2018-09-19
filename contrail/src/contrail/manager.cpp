@@ -31,8 +31,8 @@ ContrailManager::ContrailManager( ros::NodeHandle nh, const bool use_init_pose, 
 	param_fallback_to_pose_(false),
 	pose_reached_(false),
 	path_c_(0),
-	dsp_reached_time_(0),
-	param_hold_duration_(0),
+	param_nominal_lvel_(0),
+	param_nominal_rvel_(0),
 	param_dsp_radius_(0.0),
 	param_dsp_yaw_(0.0),
 	dyncfg_settings_(ros::NodeHandle(nh, "contrail")) {
@@ -235,7 +235,8 @@ bool ContrailManager::get_spline_reference( mavros_msgs::PositionTarget &ref, co
 }
 
 bool ContrailManager::get_discrete_path_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const Eigen::Affine3d &g_c ) {
-	bool success = false;
+	bool success_discrete = false;
+	bool success_spline = false;
 
 	if( has_path_reference() ) {
 		//Prepare the tracked pose
@@ -244,10 +245,60 @@ bool ContrailManager::get_discrete_path_reference( mavros_msgs::PositionTarget &
 		ps.header.stamp = t;
 
 		//Keep tracking the poses as long as we haven't reached the end unexpectedly
-		if(path_c_ < msg_path_.poses.size()) {
-			//Just track the last pose
-			ps.pose = msg_path_.poses[path_c_].pose;
-			success = true;
+		if( path_c_ < msg_path_.poses.size() ) {
+			//Just track the first/last pose
+			if( ( path_c_ == 0 ) || ( path_c_ == msg_path_.poses.size() - 1 ) ) {
+				ps.pose = msg_path_.poses[path_c_].pose;
+				success_discrete = true;
+			} else {
+				if( t < dsp_spline_start_ ) {
+					success_discrete = true;
+					ps.pose = msg_path_.poses[path_c_-1].pose;
+					ROS_INFO_THROTTLE(2.0, "[Contrail] Waiting for discrete path spline to start");
+				} else if( t > ( dsp_spline_start_ + dsp_spline_dur_ ) ) {
+					success_discrete = true;
+					ps.pose = msg_path_.poses[path_c_].pose;
+					ROS_INFO_THROTTLE(2.0, "[Contrail] Waiting for mav to reach discrete path spline to end");
+				} else {
+					// Spline tracking
+					Eigen::Vector3d p_interp = Eigen::Vector3d::Zero();
+					Eigen::Vector3d v_interp = Eigen::Vector3d::Zero();
+					double yaw = 0.0;
+					double yaw_rate = 0.0;
+
+					//Get normalized time
+					double t_norm = normalize((t - dsp_spline_start_).toSec(), 0.0, dsp_spline_dur_.toSec());
+
+					//Interpolate spline
+					get_dsp_spline_reference(p_interp, v_interp, yaw, yaw_rate, t_norm);
+
+					ref.header.stamp = t;
+					ref.header.frame_id = msg_path_.header.frame_id;
+
+					//Set up for a full trajectory reference
+					ref.coordinate_frame = ref.FRAME_LOCAL_NED;
+					ref.type_mask = ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ |
+									ref.FORCE;
+
+					ref.position.x = p_interp.x();
+					ref.position.y = p_interp.y();
+					ref.position.z = p_interp.z();
+					ref.yaw = yaw;
+
+					ref.velocity.x = v_interp.x() / dsp_spline_dur_.toSec();
+					ref.velocity.y = v_interp.y() / dsp_spline_dur_.toSec();
+					ref.velocity.z = v_interp.z() / dsp_spline_dur_.toSec();
+					ref.yaw_rate = yaw_rate / dsp_spline_dur_.toSec();
+
+					ROS_INFO("Vel: [%0.2f;%0.2f;%0.2f]", ref.velocity.x, ref.velocity.y, ref.velocity.z);
+
+					ref.acceleration_or_force.x = 0.0;
+					ref.acceleration_or_force.y = 0.0;
+					ref.acceleration_or_force.z = 0.0;
+
+					success_spline = true;
+				}
+			}
 
 			//Check all the logic for the next loop
 			if( check_waypoint_reached(position_from_msg(msg_path_.poses[path_c_].pose.position),
@@ -255,54 +306,84 @@ bool ContrailManager::get_discrete_path_reference( mavros_msgs::PositionTarget &
 									   g_c.translation(),
 									   yaw_from_quaternion(Eigen::Quaterniond(g_c.linear()))) ) {
 				//If reached the goal
-				if( check_waypoint_complete(t) ) {
-					if( path_c_ < msg_path_.poses.size() ) {
-						//There are more waypoints left in the path
-						path_c_++;
-						reset_waypoint_timer();
+				//if( check_waypoint_complete(t) ) {
+				if( path_c_ < msg_path_.poses.size() ) {
+					//There are more waypoints left in the path
+					path_c_++;
+					//reset_waypoint_timer();
+
+					//If we aren't on the final leg, generate new wp splines
+					if( path_c_ < ( msg_path_.poses.size() - 1 ) ) {
+						ROS_INFO("Generating next path segment");
+
+						//Calculate next waypoint spline in the list
+						std::vector<double> dsp_wp_x = {msg_path_.poses[path_c_-1].pose.position.x, msg_path_.poses[path_c_].pose.position.x};
+						std::vector<double> dsp_wp_y = {msg_path_.poses[path_c_-1].pose.position.y, msg_path_.poses[path_c_].pose.position.y};
+						std::vector<double> dsp_wp_z = {msg_path_.poses[path_c_-1].pose.position.z, msg_path_.poses[path_c_].pose.position.z};
+						std::vector<double> dsp_wp_yaw = {0.0, 0.0};
+
+						dsp_spline_x_ = tinyspline::Utils::interpolateCubic(&dsp_wp_x, 1);
+						dsp_spline_y_ = tinyspline::Utils::interpolateCubic(&dsp_wp_y, 1);
+						dsp_spline_z_ = tinyspline::Utils::interpolateCubic(&dsp_wp_z, 1);
+						dsp_spline_yaw_ = tinyspline::Utils::interpolateCubic(&dsp_wp_yaw, 1);
+
+						double dx = dsp_wp_x[1] - dsp_wp_x[0];
+						double dy = dsp_wp_x[1] - dsp_wp_x[0];
+						double dz = dsp_wp_x[1] - dsp_wp_x[0];
+						double dyaw = dsp_wp_yaw[1] - dsp_wp_yaw[0];
+
+						double t_dur_wp = std::sqrt(dx*dx + dy*dy + dz*dz) / param_nominal_lvel_;
+						double t_dur_yaw = dyaw / param_nominal_rvel_;
+						double t_dur = (t_dur_wp > t_dur_yaw) ? t_dur_wp : t_dur_yaw;
+
+						dsp_spline_start_ = t;
+						dsp_spline_dur_ = ros::Duration(t_dur);
+
+						ROS_INFO("Done!");
 					}
+				}
 
-					//Update the path status
-					publish_waypoint_reached(msg_path_.header.frame_id, t, path_c_, msg_path_.poses.size());
+				//Update the path status
+				publish_waypoint_reached(msg_path_.header.frame_id, t, path_c_, msg_path_.poses.size());
 
-					//Handle the path being complete
-					if( path_c_ >= msg_path_.poses.size() ) {
-						if(param_fallback_to_pose_) {
-							//Just track the last pose
-							geometry_msgs::PoseStamped hold;
-							hold.header = msg_path_.header;
-							hold.pose = msg_path_.poses[msg_path_.poses.size()-1].pose;
+				//Handle the path being complete
+				if( path_c_ >= msg_path_.poses.size() ) {
+					if(param_fallback_to_pose_) {
+						//Just track the last pose
+						geometry_msgs::PoseStamped hold;
+						hold.header = msg_path_.header;
+						hold.pose = msg_path_.poses[msg_path_.poses.size()-1].pose;
 
-							//Should never fail, but just in case
-							if(!set_discrete_pose_reference(hold, true) ) {
-								ROS_ERROR("[Contrail] Error changing fallback tracking reference!");
-							}
-						} else {
-							//Set back to no tracking
-							if(!set_reference_used(TrackingRef::NONE, t)) {
-								ROS_ERROR("[Contrail] Error changing tracking reference!");
-							}
+						//Should never fail, but just in case
+						if(!set_discrete_pose_reference(hold, true) ) {
+							ROS_ERROR("[Contrail] Error changing fallback tracking reference!");
 						}
-
-						ROS_INFO("[Contrail] Finished path reference");
-
-						//Reset the path tracking
-						path_c_ = 0;
-						reset_waypoint_timer();
+					} else {
+						//Set back to no tracking
+						if(!set_reference_used(TrackingRef::NONE, t)) {
+							ROS_ERROR("[Contrail] Error changing tracking reference!");
+						}
 					}
-				} //else we haven't stayed long enough, so keep tracking as usual
-			} else {
+
+					ROS_INFO("[Contrail] Finished path reference");
+
+					//Reset the path tracking
+					path_c_ = 0;
+					//reset_waypoint_timer();
+				}
+				//} //else we haven't stayed long enough, so keep tracking as usual
+			}// else {
 				//We're outside the waypoint, so keep tracking
-				reset_waypoint_timer();
-			}
+			//	reset_waypoint_timer();
+			//}
 		}
 
-		if(success) {
+		if(success_discrete) {
 			ref = target_from_pose(t, msg_path_.header.frame_id, ps.pose);
 		}
 	}
 
-	return success;
+	return success_discrete || success_spline;
 }
 
 bool ContrailManager::get_discrete_pose_reference( mavros_msgs::PositionTarget &ref, const ros::Time t, const Eigen::Affine3d &g_c ) {
@@ -503,7 +584,8 @@ bool ContrailManager::set_discrete_pose_reference( const geometry_msgs::PoseStam
 
 void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &config, uint32_t level ) {
 	param_fallback_to_pose_ = config.fallback_to_pose;
-	param_hold_duration_ = ros::Duration(config.waypoint_hold_duration);
+	param_nominal_lvel_ = config.nominal_waypoint_velocity;
+	param_nominal_rvel_ = config.nominal_rotation_velocity;
 	param_dsp_radius_ = config.waypoint_radius;
 	param_dsp_yaw_ = config.waypoint_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
@@ -651,8 +733,8 @@ bool ContrailManager::check_waypoint_reached( const Eigen::Vector3d& pos_s, cons
 }
 
 bool ContrailManager::check_waypoint_complete( const ros::Time t ) {
-	bool reached = false;
-
+	bool reached = true;
+	/*
 	if( dsp_reached_time_ == ros::Time(0) ) {
 		//if the waypoint was only just reached
 		dsp_reached_time_ = t;
@@ -660,12 +742,12 @@ bool ContrailManager::check_waypoint_complete( const ros::Time t ) {
 		//we had previously reached the waypoint, and we've been there long enough
 		reached = true;
 	}
-
+	*/
 	return reached;
 }
 
 void ContrailManager::reset_waypoint_timer( void ) {
-	dsp_reached_time_ = ros::Time(0);
+	//dsp_reached_time_ = ros::Time(0);
 }
 
 double ContrailManager::radial_dist( const Eigen::Vector3d a, const Eigen::Vector3d b ) {

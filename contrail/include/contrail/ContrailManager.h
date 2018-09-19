@@ -53,8 +53,8 @@ class ContrailManager {
 		bool param_fallback_to_pose_;
 		bool pose_reached_;	//Check so that waypoint messages for pose are only output once
 		int path_c_; //Counter for the current path step
-		ros::Time dsp_reached_time_; //Check to keep track of if the current discrete setpoint has been reached already
-		ros::Duration param_hold_duration_;
+		double param_nominal_lvel_;
+		double param_nominal_rvel_;
 		double param_dsp_radius_;
 		double param_dsp_yaw_;
 		double param_spline_approx_res_;
@@ -73,6 +73,13 @@ class ContrailManager {
 		tinyspline::BSpline spline_y_;
 		tinyspline::BSpline spline_z_;
 		tinyspline::BSpline spline_yaw_;
+
+		tinyspline::BSpline dsp_spline_x_;
+		tinyspline::BSpline dsp_spline_y_;
+		tinyspline::BSpline dsp_spline_z_;
+		tinyspline::BSpline dsp_spline_yaw_;
+		ros::Time dsp_spline_start_;
+		ros::Duration dsp_spline_dur_;
 		/*
 		//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
 		tinyspline::BSpline spline_xd_;
@@ -256,6 +263,56 @@ class ContrailManager {
 			std::vector<tinyspline::real> vydh = spline_y_(uh).result();
 			std::vector<tinyspline::real> vzdh = spline_z_(uh).result();
 			std::vector<tinyspline::real> vyawdh = spline_yaw_(uh).result();
+
+			v_interp.x() = (vxdh[0] - vxdl[0]) / (2*dt);
+			v_interp.y() = (vydh[0] - vydl[0]) / (2*dt);
+			v_interp.z() = (vzdh[0] - vzdl[0]) / (2*dt);
+			yaw_rate = (vyawdh[0] - vyawdl[0]) / (2*dt);
+		}
+
+		inline void get_dsp_spline_reference(Eigen::Vector3d& p_interp,
+										 Eigen::Vector3d& v_interp,
+										 double& yaw,
+										 double& yaw_rate,
+										 const double u) const {
+			// x values need to be scaled down in extraction as well.
+			ROS_ASSERT_MSG((u >= 0.0) && (u <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
+
+
+			std::vector<tinyspline::real> vx = dsp_spline_x_(u).result();
+			std::vector<tinyspline::real> vy = dsp_spline_y_(u).result();
+			std::vector<tinyspline::real> vz = dsp_spline_z_(u).result();
+			std::vector<tinyspline::real> vyaw = dsp_spline_yaw_(u).result();
+
+			p_interp = Eigen::Vector3d(vx[0],vy[0],vz[0]);
+			yaw = vyaw[0];
+
+			/*
+			std::vector<tinyspline::real> vxd = spline_xd_(u).result();
+			std::vector<tinyspline::real> vyd = spline_yd_(u).result();
+			std::vector<tinyspline::real> vzd = spline_zd_(u).result();
+			std::vector<tinyspline::real> vyawd = spline_yawd_(u).result();
+
+			v_interp = Eigen::Vector3d(vxd[0],vyd[0],vzd[0]);
+			yaw_rate = vyawd[0];
+			*/
+
+			//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
+			double dt = 0.02;
+			//Shorten time to ensure that 0.0<=u<=1.0 is preserved
+			double ul = u - dt;
+			double uh = u + dt;
+			ul = (ul >= 0.0) ? ul : 0.0;
+			uh = (uh <= 1.0) ? uh : 1.0;
+
+			std::vector<tinyspline::real> vxdl = dsp_spline_x_(ul).result();
+			std::vector<tinyspline::real> vydl = dsp_spline_y_(ul).result();
+			std::vector<tinyspline::real> vzdl = dsp_spline_z_(ul).result();
+			std::vector<tinyspline::real> vyawdl = dsp_spline_yaw_(ul).result();
+			std::vector<tinyspline::real> vxdh = dsp_spline_x_(uh).result();
+			std::vector<tinyspline::real> vydh = dsp_spline_y_(uh).result();
+			std::vector<tinyspline::real> vzdh = dsp_spline_z_(uh).result();
+			std::vector<tinyspline::real> vyawdh = dsp_spline_yaw_(uh).result();
 
 			v_interp.x() = (vxdh[0] - vxdl[0]) / (2*dt);
 			v_interp.y() = (vydh[0] - vydl[0]) / (2*dt);
