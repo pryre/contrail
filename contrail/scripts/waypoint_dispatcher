@@ -1,0 +1,82 @@
+#!/usr/bin/env python2
+
+import sys
+from math import *
+
+import roslib
+roslib.load_manifest('contrail')
+import rospy
+import actionlib
+
+import contrail.waypoint_helper as wph
+from contrail.msg import TrajectoryAction, TrajectoryGoal
+from contrail_msgs.msg import WaypointList
+
+global pub_wpl
+global timer
+
+def timer_callback(e):
+	global pub_wpl
+	global timer
+
+	if e.current_real > rospy.Time(0):
+		success, wps = wph.load_waypoints()
+
+		if success and (len(wps) >= 2):
+			rospy.loginfo("Loaded %i waypoints" % len(wps))
+
+			action_topic = rospy.get_param("~action_topic", 'contrail')
+			nom_lvel = rospy.get_param("~nominal_velocity", 0.5)
+			nom_rvel = rospy.get_param("~nominal_rate", 0.5)
+
+			client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)
+			client_base.wait_for_server()
+
+			for i in range(len(wps) - 1):
+				goal_base = TrajectoryGoal()
+				goal_base.positions = [wps[i].position, wps[i+1].position]
+				goal_base.yaws = [wps[i].yaw,wps[i+1].yaw]
+
+				dx = wps[i+1].position.x - wps[i].position.x
+				dy = wps[i+1].position.y - wps[i].position.y
+				dz = wps[i+1].position.z - wps[i].position.z
+
+				lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
+				rt = (wps[i+1].yaw - wps[i].yaw ) / nom_rvel
+
+				if lt > rt:
+					goal_base.duration = rospy.Duration.from_sec(lt)
+				else:
+					goal_base.duration = rospy.Duration.from_sec(rt)
+
+				goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
+
+				client_base.send_goal(goal_base)
+				client_base.wait_for_result()
+
+			timer.shutdown()
+			rospy.signal_shutdown("Waypoint plan complete!")
+		else:
+			if (len(wps) < 2):
+				rospy.logerr("Not enough waypoints were been loaded (%i)" % len(wps))
+				rospy.signal_shutdown("Error: no waypoints")
+			else:
+				rospy.logerr("Unable to locate waypoint parameters")
+				rospy.signal_shutdown("Error: no waypoints")
+
+def waypoint_pub():
+	global timer
+	global pub_wpl
+	rospy.init_node('load_waypoints', anonymous=True)
+	pub_wpl = rospy.Publisher('waypoints', WaypointList, queue_size=10, latch=True)
+
+	rospy.loginfo("Loading waypionts from parameters...")
+	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
+
+	rospy.spin()
+
+if __name__ == '__main__':
+	try:
+		waypoint_pub()
+	except rospy.ROSInterruptException:
+		pass

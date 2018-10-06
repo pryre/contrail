@@ -7,6 +7,8 @@ import rospy
 from contrail_msgs.msg import Waypoint
 from contrail_msgs.msg import WaypointList
 
+import contrail.waypoint_helper as wph
+
 global pub_wpl
 global timer
 
@@ -15,30 +17,15 @@ def timer_callback(e):
 	global timer
 
 	if e.current_real > rospy.Time(0):
-		if( rospy.has_param("~waypoints/wp0/x") and \
-			rospy.has_param("~waypoints/wp0/y") and \
-			rospy.has_param("~waypoints/wp0/z") and \
-			rospy.has_param("~waypoints/wp0/yaw") ):
+		success, wps = wph.load_waypoints()
+
+		if success:
+			rospy.loginfo("Loaded %i waypoints" % len(wps))
 
 			msg_out = WaypointList()
 			msg_out.header.frame_id = rospy.get_param("~frame_id", "map")
-			msg_out.header.stamp = e.current_real
-
-			i = 0
-			while( rospy.has_param("~waypoints/wp%i/x" % (i)) and \
-				   rospy.has_param("~waypoints/wp%i/y" % (i)) and \
-				   rospy.has_param("~waypoints/wp%i/z" % (i)) and \
-				   rospy.has_param("~waypoints/wp%i/yaw" % (i)) ):
-
-				msg_out.waypoints.append(Waypoint())
-				msg_out.waypoints[i].position.x = rospy.get_param("~waypoints/wp%i/x" % (i))
-				msg_out.waypoints[i].position.y = rospy.get_param("~waypoints/wp%i/y" % (i))
-				msg_out.waypoints[i].position.z = rospy.get_param("~waypoints/wp%i/z" % (i))
-				msg_out.waypoints[i].yaw = rospy.get_param("~waypoints/wp%i/yaw" % (i))
-
-				i += 1
-
-			rospy.loginfo("Loaded %i waypoints" % (i))
+			msg_out.header.stamp = rospy.Time.now()
+			msg_out.waypoints = wps
 
 			pub_wpl.publish(msg_out)
 			timer.shutdown()

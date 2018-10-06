@@ -8,13 +8,15 @@ add_compile_options(-std=c++11)
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
 find_package(catkin REQUIRED COMPONENTS
+  roscpp
   nav_msgs
   mavros_msgs
   geometry_msgs
   contrail_msgs
-  roscpp
   message_generation
   dynamic_reconfigure
+  tinyspline_ros
+  actionlib
 )
 
 ## System dependencies are found with CMake's conventions
@@ -25,7 +27,7 @@ find_package(Eigen3 REQUIRED)
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
 ## See http://ros.org/doc/api/catkin/html/user_guide/setup_dot_py.html
-# catkin_python_setup()
+catkin_python_setup()
 
 ################################################
 ## Declare ROS messages, services and actions ##
@@ -66,17 +68,18 @@ find_package(Eigen3 REQUIRED)
 # )
 
 ## Generate actions in the 'action' folder
-# add_action_files(
-#   FILES
-#   Action1.action
-#   Action2.action
-# )
+add_action_files(
+  FILES
+  Trajectory.action
+)
 
 ## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   nav_msgs
-# )
+generate_messages(
+  DEPENDENCIES
+  std_msgs
+  geometry_msgs
+  actionlib_msgs
+)
 
 ################################################
 ## Declare ROS dynamic reconfigure parameters ##
@@ -109,7 +112,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
   LIBRARIES ${PROJECT_NAME}_manager
-  CATKIN_DEPENDS contrail_msgs
+  CATKIN_DEPENDS contrail_msgs tinyspline_ros
   DEPENDS EIGEN3
 )
 
@@ -126,12 +129,6 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(${PROJECT_NAME}_tinysplinec
-  src/${PROJECT_NAME}/tinyspline.c
-)
-add_library(${PROJECT_NAME}_tinysplinecpp
-  src/${PROJECT_NAME}/tinysplinecpp.cpp
-)
 add_library(${PROJECT_NAME}_manager
   src/${PROJECT_NAME}/manager.cpp
 )
@@ -139,15 +136,9 @@ add_library(${PROJECT_NAME}_guidance
   src/${PROJECT_NAME}/guidance.cpp
 )
 
-#add_library(${PROJECT_NAME}_path_extract
-#  src/${PROJECT_NAME}/path_extract.cpp
-#)
-
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-add_dependencies(${PROJECT_NAME}_tinysplinec ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-add_dependencies(${PROJECT_NAME}_tinysplinecpp ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 add_dependencies(${PROJECT_NAME}_guidance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
@@ -169,17 +160,7 @@ add_executable(${PROJECT_NAME}_guidance_node src/guidance_node.cpp)
 add_dependencies(${PROJECT_NAME}_guidance_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME}_tinysplinec
-  ${catkin_LIBRARIES}
-)
-
-target_link_libraries(${PROJECT_NAME}_tinysplinecpp
-  ${PROJECT_NAME}_tinysplinec
-  ${catkin_LIBRARIES}
-)
-
 target_link_libraries(${PROJECT_NAME}_manager
-  ${PROJECT_NAME}_tinysplinecpp
   ${catkin_LIBRARIES}
 )
 
@@ -202,10 +183,14 @@ target_link_libraries(${PROJECT_NAME}_guidance_node
 
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
-# install(PROGRAMS
-#   scripts/my_python_script
-#   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-# )
+install(PROGRAMS
+  scripts/converter_path_spline
+  scripts/converter_waypoints_path
+  scripts/load_spline
+  scripts/load_waypoints
+  scripts/waypoint_dispatcher
+  DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 ## Mark executables and/or libraries for installation
 # install(TARGETS ${PROJECT_NAME} ${PROJECT_NAME}_node
