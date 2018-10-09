@@ -100,6 +100,18 @@ class ContrailManager {
 			return (x - min) / (max - min);
 		}
 
+		inline void make_yaw_continuous( std::vector<double>& yaw ) {
+			for(int i=1; i<yaw.size(); i++) {
+				while(fabs(yaw[i] - yaw[i-1]) > M_PI) {
+					if(yaw[i] > yaw[i-1]) {
+						yaw[i] -= 2*M_PI;
+					} else {
+						yaw[i] += 2*M_PI;
+					}
+				}
+			}
+		}
+
 		void publish_approx_spline( const ros::Time& stamp );
 		void publish_spline_points( const ros::Time& stamp, const std::vector<geometry_msgs::Vector3>& pos, const std::vector<double>& yaw );
 

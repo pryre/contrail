@@ -95,10 +95,13 @@ void ContrailManager::set_action_goal( void ) {
 			positions_z.push_back(goal->positions[i].z);
 		}
 
+		std::vector<double>positions_yaw = goal->yaws;
+		make_yaw_continuous(positions_yaw);
+
 		spline_x_ = tinyspline::Utils::interpolateCubic(&positions_x, 1);
 		spline_y_ = tinyspline::Utils::interpolateCubic(&positions_y, 1);
 		spline_z_ = tinyspline::Utils::interpolateCubic(&positions_z, 1);
-		spline_r_ = tinyspline::Utils::interpolateCubic(&goal->yaws, 1);
+		spline_r_ = tinyspline::Utils::interpolateCubic(&positions_yaw, 1);
 
 		//Smooth out control points to give a nicer fit
 		std::vector<tinyspline::real> ctrlp_x = spline_x_.controlPoints();
