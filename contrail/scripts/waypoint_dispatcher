@@ -44,10 +44,11 @@ def timer_callback(e):
 				lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
 				rt = (wps[i+1].yaw - wps[i].yaw ) / nom_rvel
 
-				if lt > rt:
-					goal_base.duration = rospy.Duration.from_sec(lt)
-				else:
-					goal_base.duration = rospy.Duration.from_sec(rt)
+				goal_base.duration = rospy.Duration.from_sec(max([lt,rt]))
+
+				rospy.loginfo("Waypoint %i: [%0.4f,%0.4f,%0.4f;%0.4f] -> [%0.4f,%0.4f,%0.4f;%0.4f]" %
+							   (i+1, wps[i].position.x, wps[i].position.y, wps[i].position.z, movements[i].yaw,
+							    wps[i+1].position.x, wps[i+1].position.y, wps[i+1].position.z, movements[i+1].yaw))
 
 				goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
 
@@ -62,7 +63,7 @@ def timer_callback(e):
 				rospy.signal_shutdown("Error: no waypoints")
 			else:
 				rospy.logerr("Unable to locate waypoint parameters")
-				rospy.signal_shutdown("Error: no waypoints")
+				rospy.signal_shutdown("Error: no parameters")
 
 def waypoint_pub():
 	global timer
