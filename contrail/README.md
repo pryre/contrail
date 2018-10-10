@@ -12,7 +12,7 @@ sudo apt install ros-kinetic-nav-msgs ros-kinetic-geometry-msgs ros-kinetic-mavr
 #### Download & Compile
 ```sh
 cd ~/catkin_ws/src
-git clone https://github.com/qutas/contrail
+git clone https://github.com/qutas/contrail -b v1.0
 cd ~/catkin_ws
 catkin_make
 source ~/catkin_ws/devel/setup.bash
