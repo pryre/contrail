@@ -1,0 +1,11 @@
+<?xml version='1.0'?>
+<launch>
+	<arg name="s_name" default="circle"/>
+
+	<node pkg="contrail" type="spline_dispatcher" name="spline_dispatcher" clear_params="true" output="screen">
+		<param name="action_topic" value="/mavel/contrail" />
+		<param name="duration" value="40.0" />
+
+		<rosparam command="load" file="$(find contrail)/splines/$(arg s_name).yaml"/>
+	</node>
+</launch>

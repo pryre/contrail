@@ -51,6 +51,11 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 ContrailManager::~ContrailManager( void ) {
 }
 
+
+void ContrailManager::set_frame_id( std::string frame_id ) {
+	param_frame_id_ = frame_id;
+}
+
 bool ContrailManager::has_reference( const ros::Time t ) {
 	return ( spline_start_ > ros::Time(0) );
 }
@@ -63,7 +68,7 @@ void ContrailManager::callback_timer(const ros::TimerEvent& e) {
 
 	// Check that preempt has not been requested by the client
 	if( as_.isPreemptRequested() ) {
-		ROS_INFO("Router Base: Preempted");
+		ROS_INFO("Contrail: Preempted");
 		as_.setPreempted();
 		spline_in_progress_ = false;
 		wait_reached_end_ = false;
@@ -146,13 +151,13 @@ void ContrailManager::set_action_goal( void ) {
 		publish_approx_spline(tc);
 		publish_spline_points(tc, goal->positions, goal->yaws);
 
-		ROS_INFO( "Router Base: creating position spline connecting %i points", (int)goal->positions.size() );
-		ROS_INFO( "Router Base: creating rotation spline connecting %i points", (int)goal->yaws.size() );
+		ROS_INFO( "Contrail: creating position spline connecting %i points", (int)goal->positions.size() );
+		ROS_INFO( "Contrail: creating rotation spline connecting %i points", (int)goal->yaws.size() );
 	} else {
 		spline_in_progress_ = false;
 		as_.setAborted();
 
-		ROS_ERROR( "Router Base: at least 2 positions/yaws must be specified (%i/%i), and duration must be >0 (%0.4f)", (int)goal->positions.size(), (int)goal->yaws.size(), goal->duration.toSec() );
+		ROS_ERROR( "Contrail: at least 2 positions/yaws must be specified (%i/%i), and duration must be >0 (%0.4f)", (int)goal->positions.size(), (int)goal->yaws.size(), goal->duration.toSec() );
 	}
 }
 
@@ -174,6 +179,7 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 
 	if(	get_reference( pos, vel, rpos, rrate, tc ) ) {
 		ref.header.stamp = tc;
+		ref.header.frame_id = param_frame_id_;
 
 		ref.coordinate_frame = ref.FRAME_LOCAL_NED;
 		ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ | ref.FORCE;
@@ -260,7 +266,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				vel = Eigen::Vector3d::Zero();
 				rrate = 0.0;
 
-				ROS_INFO( "Router Base: spline finished" );
+				ROS_INFO( "Contrail: spline finished" );
 			}
 
 			output_pos_last_ = pos;
@@ -298,7 +304,7 @@ void ContrailManager::check_end_reached( const Eigen::Affine3d &g_c ) {
 			as_.setSucceeded(result);
 
 			wait_reached_end_ = false;
-			ROS_INFO( "Router Base: action finished" );
+			ROS_INFO( "Contrail: action finished" );
 		}
 	}
 }

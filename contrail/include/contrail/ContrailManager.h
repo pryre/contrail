@@ -65,6 +65,8 @@ class ContrailManager {
 		ContrailManager( ros::NodeHandle nh, std::string frame_id = "map" );
 
 		~ContrailManager( void );
+		
+		void set_frame_id( std::string frame_id );
 
 		bool has_reference( const ros::Time t );
 
