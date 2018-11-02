@@ -59,7 +59,7 @@ def timer_callback(e):
 			elif tracking_mode == "continuous":
 				duration = rospy.get_param("~waypoints/duration")
 
-				dispatch_discrete(wps,duration)
+				dispatch_continuous(wps,duration)
 			else:
 				rospy.logerr("Unknown tracking mode (%s)" % tracking_mode)
 				rospy.signal_shutdown("Error: bad mode")
@@ -77,7 +77,6 @@ def waypoint_pub():
 	global timer
 	global client_base
 	rospy.init_node('load_waypoints', anonymous=True)
-	pub_wpl = rospy.Publisher('waypoints', WaypointList, queue_size=10, latch=True)
 
 	action_topic = rospy.get_param("~action_topic", 'contrail')
 	client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)

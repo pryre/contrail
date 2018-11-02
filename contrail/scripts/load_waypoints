@@ -1,0 +1,51 @@
+#!/usr/bin/env python2
+
+import sys
+from math import *
+
+import rospy
+from contrail_msgs.msg import Waypoint
+from contrail_msgs.msg import WaypointList
+
+import contrail.waypoint_helper as wph
+
+global pub_wpl
+global timer
+
+def timer_callback(e):
+	global pub_wpl
+	global timer
+
+	if e.current_real > rospy.Time(0):
+		success, wps = wph.load_waypoints()
+
+		if success:
+			rospy.loginfo("Loaded %i waypoints" % len(wps))
+
+			msg_out = WaypointList()
+			msg_out.header.frame_id = rospy.get_param("~frame_id", "map")
+			msg_out.header.stamp = rospy.Time.now()
+			msg_out.waypoints = wps
+
+			pub_wpl.publish(msg_out)
+			timer.shutdown()
+		else:
+			rospy.logerr("Unable to locate waypoint parameters")
+			rospy.signal_shutdown("Error: no waypoints")
+
+def waypoint_pub():
+	global timer
+	global pub_wpl
+	rospy.init_node('load_waypoints', anonymous=True)
+	pub_wpl = rospy.Publisher('waypoints', WaypointList, queue_size=10, latch=True)
+
+	rospy.loginfo("Loading waypionts from parameters...")
+	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
+
+	rospy.spin()
+
+if __name__ == '__main__':
+	try:
+		waypoint_pub()
+	except rospy.ROSInterruptException:
+		pass

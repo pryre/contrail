@@ -1,0 +1,10 @@
+<?xml version='1.0'?>
+<launch>
+	<arg name="wp_name" default="home"/>
+
+	<node pkg="contrail" type="dispatcher" name="waypoint_dispatcher" clear_params="true" output="screen">
+		<param name="action_topic" value="/emulated_uav/guidance/contrail" />
+
+		<rosparam command="load" file="$(find contrail)/waypoints/$(arg wp_name).yaml"/>
+	</node>
+</launch>
