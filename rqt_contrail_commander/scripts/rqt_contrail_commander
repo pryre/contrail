@@ -2,9 +2,9 @@
 
 import sys
 
-from rqt_contrail_planner.planner import Planner
+from rqt_contrail_commander.commander import Commander
 from rqt_gui.main import Main
 
-plugin = 'rqt_contrail_planner'
+plugin = 'rqt_contrail_commander'
 main = Main(filename=plugin)
 sys.exit(main.main(standalone=plugin))

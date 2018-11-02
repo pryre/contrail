@@ -1,5 +1,5 @@
 <library path="src">
-  <class name="Contrail Planner" type="rqt_contrail_planner.contrail_planner.Planner" base_class_type="rqt_gui_py::Plugin">
+  <class name="Contrail Planner" type="rqt_contrail_planner.planner.Planner" base_class_type="rqt_gui_py::Plugin">
     <description>
 	Ground Control Station plugin for RQT to allow easy planning of flight trajectories
     </description>

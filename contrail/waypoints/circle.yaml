@@ -1,4 +1,6 @@
 waypoints:
+  mode: "continuous"
+  duration: 60
   wp0:
     x: 1.0
     y: -1.0

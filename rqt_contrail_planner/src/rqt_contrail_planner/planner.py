@@ -12,11 +12,11 @@ from mavros.utils import *
 from mavros.param import *
 from mavros import command
 
-class RobinGCS(Plugin):
+class Planner(Plugin):
 	def __init__(self, context):
 		super(RobinGCS, self).__init__(context)
 		# Give QObjects reasonable names
-		self.setObjectName('RobinGCS')
+		self.setObjectName('ContrailPlanner')
 		rp = rospkg.RosPack()
 
 		# Process standalone plugin command-line arguments
@@ -35,11 +35,11 @@ class RobinGCS(Plugin):
 		self._widget = QWidget()
 		# Get path to UI file which is a sibling of this file
 		# in this example the .ui and .py file are in the same folder
-		ui_file = os.path.join(rp.get_path('rqt_robin_gcs'), 'resource', 'RobinGCS.ui')
+		ui_file = os.path.join(rp.get_path('rqt_contrail_planner'), 'resource', 'ContrailPlanner.ui')
 		# Extend the widget with all attributes and children from UI file
 		loadUi(ui_file, self._widget)
 		# Give QObjects reasonable names
-		self._widget.setObjectName('RobinGCSUi')
+		self._widget.setObjectName('ContrailPlannerUi')
 		# Show _widget.windowTitle on left-top of each plugin (when
 		# it's set in _widget). This is useful when you open multiple
 		# plugins at once. Also if you open multiple instances of your
