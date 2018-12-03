@@ -136,11 +136,16 @@ void ContrailManager::set_action_goal( void ) {
 			spline_yd_ = spline_y_.derive();
 			spline_zd_ = spline_z_.derive();
 			spline_rd_ = spline_r_.derive();
+			spline_xdd_ = spline_xd_.derive();
+			spline_ydd_ = spline_yd_.derive();
+			spline_zdd_ = spline_zd_.derive();
+			spline_rdd_ = spline_rd_.derive();
 
 			use_dirty_derivative_ = false;
 		}
 		catch(std::runtime_error) {
 			use_dirty_derivative_ = true;
+			ROS_WARN("Unable to calculate derivative splines, using dirty derivative");
 		}
 
 		spline_pos_start_ = vector_from_msg(goal->positions.front());
@@ -174,15 +179,15 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 
 	Eigen::Vector3d pos;
 	Eigen::Vector3d vel;
+	Eigen::Vector3d acc;
 	double rpos;
 	double rrate;
 
-	if(	get_reference( pos, vel, rpos, rrate, tc ) ) {
+	if(	get_reference( pos, vel, acc, rpos, rrate, tc ) ) {
 		ref.header.stamp = tc;
 		ref.header.frame_id = param_frame_id_;
 
 		ref.coordinate_frame = ref.FRAME_LOCAL_NED;
-		ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ | ref.FORCE;
 
 		ref.position = point_from_eig(pos);
 		ref.yaw = rpos;
@@ -190,9 +195,12 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
 
-		ref.acceleration_or_force.x = 0.0;
-		ref.acceleration_or_force.y = 0.0;
-		ref.acceleration_or_force.z = 0.0;
+		if(param_ref_accel_) {
+			ref.acceleration_or_force = vector_from_eig(acc);
+		} else {
+			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
+			ref.acceleration_or_force = vector_from_eig( Eigen::Vector3d::Zero() );
+		}
 
 		success = true;
 	}
@@ -204,6 +212,7 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 
 bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 									 Eigen::Vector3d &vel,
+									 Eigen::Vector3d &acc,
 									 double &rpos,
 									 double &rrate,
 									 const ros::Time tc ) {
@@ -218,12 +227,14 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				pos = spline_pos_start_;
 				rpos = spline_rot_start_;
 				vel = Eigen::Vector3d::Zero();
+				acc = Eigen::Vector3d::Zero();
 				rrate = 0.0;
 
 				contrail::TrajectoryFeedback feedback;
 				feedback.progress = -1.0;
 				feedback.position = vector_from_eig(pos);
 				feedback.velocity = vector_from_eig(vel);
+				feedback.acceleration = vector_from_eig(acc);
 				feedback.yaw = rpos;
 				feedback.yawrate = rrate;
 
@@ -238,21 +249,28 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				double nvy = 0.0;
 				double nvz = 0.0;
 				double nvr = 0.0;
+				double nax = 0.0;
+				double nay = 0.0;
+				double naz = 0.0;
+				double nar = 0.0;
 
-				get_spline_reference(spline_x_, spline_xd_, npx, nvx, t_norm);
-				get_spline_reference(spline_y_, spline_yd_, npy, nvy, t_norm);
-				get_spline_reference(spline_z_, spline_zd_, npz, nvz, t_norm);
-				get_spline_reference(spline_r_, spline_rd_, npr, nvr, t_norm);
+				get_spline_reference(spline_x_, spline_xd_, spline_xdd_, npx, nvx, nax, t_norm);
+				get_spline_reference(spline_y_, spline_yd_, spline_ydd_, npy, nvy, nay, t_norm);
+				get_spline_reference(spline_z_, spline_zd_, spline_zdd_, npz, nvz, naz, t_norm);
+				get_spline_reference(spline_r_, spline_rd_, spline_rdd_, npr, nvr, nar, t_norm);
 
 				pos = Eigen::Vector3d(npx,npy,npz);
 				vel = Eigen::Vector3d(nvx,nvy,nvz) / spline_duration_.toSec();
+				acc = Eigen::Vector3d(nax,nay,naz) / ( spline_duration_.toSec() * spline_duration_.toSec() ); //XXX: HERE!
 				rpos = npr;
 				rrate = nvr / spline_duration_.toSec();
+				//nar is discarded
 
 				contrail::TrajectoryFeedback feedback;
 				feedback.progress = t_norm;
 				feedback.position = vector_from_eig(pos);
 				feedback.velocity = vector_from_eig(vel);
+				feedback.acceleration = vector_from_eig(acc);
 				feedback.yaw = rpos;
 				feedback.yawrate = rrate;
 
@@ -264,6 +282,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				pos = spline_pos_end_;
 				rpos = spline_rot_end_;
 				vel = Eigen::Vector3d::Zero();
+				acc = Eigen::Vector3d::Zero();
 				rrate = 0.0;
 
 				ROS_INFO( "Contrail: spline finished" );
@@ -275,6 +294,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 			pos = output_pos_last_;
 			rpos = output_rot_last_;
 			vel = Eigen::Vector3d::Zero();
+			acc = Eigen::Vector3d::Zero();
 			rrate = 0.0;
 		}
 
@@ -317,12 +337,15 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_end_position_accuracy_ = config.end_position_accuracy;
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
+	param_ref_accel_ = config.output_accel_ref;
 }
 
 void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
 											tinyspline::BSpline& splined,
+											tinyspline::BSpline& splinedd,
 											double& pos,
 											double& vel,
+											double& acc,
 											const double u) {
 	// x values need to be scaled down in extraction as well.
 	ROS_ASSERT_MSG((u >= 0.0) && (u <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
@@ -333,6 +356,8 @@ void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
 	if(!use_dirty_derivative_) {
 		std::vector<tinyspline::real> vv = splined(u).result();
 		vel = vv[0];
+		std::vector<tinyspline::real> va = splinedd(u).result();
+		acc = va[0];
 	} else {
 		//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
 		double dt = 0.02;
@@ -346,6 +371,7 @@ void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
 		std::vector<tinyspline::real> vdh = spline(uh).result();
 
 		vel = (vdh[0] - vdl[0]) / (2*dt);
+		acc = 0;
 	}
 }
 

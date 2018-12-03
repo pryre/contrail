@@ -36,6 +36,7 @@ class ContrailManager {
 		int param_spline_approx_res_;
 		double param_end_position_accuracy_;
 		double param_end_yaw_accuracy_;
+		bool param_ref_accel_;
 
 		ros::Time spline_start_;
 		ros::Duration spline_duration_;
@@ -47,12 +48,16 @@ class ContrailManager {
 		double spline_rot_end_;
 		tinyspline::BSpline spline_x_;
 		tinyspline::BSpline spline_xd_;
+		tinyspline::BSpline spline_xdd_;
 		tinyspline::BSpline spline_y_;
 		tinyspline::BSpline spline_yd_;
+		tinyspline::BSpline spline_ydd_;
 		tinyspline::BSpline spline_z_;
 		tinyspline::BSpline spline_zd_;
+		tinyspline::BSpline spline_zdd_;
 		tinyspline::BSpline spline_r_;
 		tinyspline::BSpline spline_rd_;
+		tinyspline::BSpline spline_rdd_;
 		bool use_dirty_derivative_;
 
 		Eigen::Vector3d output_pos_last_;
@@ -65,7 +70,7 @@ class ContrailManager {
 		ContrailManager( ros::NodeHandle nh, std::string frame_id = "map" );
 
 		~ContrailManager( void );
-		
+
 		void set_frame_id( std::string frame_id );
 
 		bool has_reference( const ros::Time t );
@@ -82,6 +87,7 @@ class ContrailManager {
 
 		bool get_reference( Eigen::Vector3d &pos,
 							Eigen::Vector3d &vel,
+							Eigen::Vector3d &acc,
 							double &rpos,
 							double &rrate,
 							const ros::Time tc );
@@ -96,7 +102,7 @@ class ContrailManager {
 
 		void set_action_goal();
 
-		void get_spline_reference(tinyspline::BSpline& spline, tinyspline::BSpline& splined, double& pos, double& vel, const double u);
+		void get_spline_reference(tinyspline::BSpline& spline, tinyspline::BSpline& splined, tinyspline::BSpline& splinedd, double& pos, double& vel, double& acc, const double u);
 
 		inline double normalize(double x, const double min, const double max) const {
 			return (x - min) / (max - min);
