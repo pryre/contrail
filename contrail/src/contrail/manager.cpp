@@ -31,6 +31,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 	param_spline_approx_res_(0),
 	param_end_position_accuracy_(0.0),
 	param_end_yaw_accuracy_(0.0),
+	param_ref_accel_(false),
 	spline_start_(0),
 	spline_duration_(0),
 	spline_in_progress_(false),
@@ -136,10 +137,10 @@ void ContrailManager::set_action_goal( void ) {
 			spline_yd_ = spline_y_.derive();
 			spline_zd_ = spline_z_.derive();
 			spline_rd_ = spline_r_.derive();
-			spline_xdd_ = spline_xd_.derive();
-			spline_ydd_ = spline_yd_.derive();
-			spline_zdd_ = spline_zd_.derive();
-			spline_rdd_ = spline_rd_.derive();
+			//spline_xdd_ = spline_xd_.derive();
+			//spline_ydd_ = spline_yd_.derive();
+			//spline_zdd_ = spline_zd_.derive();
+			//spline_rdd_ = spline_rd_.derive();
 
 			use_dirty_derivative_ = false;
 		}
@@ -195,12 +196,9 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
 
-		if(param_ref_accel_) {
-			ref.acceleration_or_force = vector_from_eig(acc);
-		} else {
+		ref.acceleration_or_force = vector_from_eig(acc);
+		if(!param_ref_accel_)
 			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
-			ref.acceleration_or_force = vector_from_eig( Eigen::Vector3d::Zero() );
-		}
 
 		success = true;
 	}
@@ -261,9 +259,15 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 
 				pos = Eigen::Vector3d(npx,npy,npz);
 				vel = Eigen::Vector3d(nvx,nvy,nvz) / spline_duration_.toSec();
-				acc = Eigen::Vector3d(nax,nay,naz) / ( spline_duration_.toSec() * spline_duration_.toSec() ); //XXX: HERE!
+
 				rpos = npr;
 				rrate = nvr / spline_duration_.toSec();
+
+				if(param_ref_accel_) {
+					acc = Eigen::Vector3d(nax,nay,naz) / ( spline_duration_.toSec() * spline_duration_.toSec() );
+				} else {
+					acc = Eigen::Vector3d::Zero();
+				}
 				//nar is discarded
 
 				contrail::TrajectoryFeedback feedback;
@@ -338,6 +342,11 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
 	param_ref_accel_ = config.output_accel_ref;
+
+	if(param_ref_accel_)
+		ROS_ERROR("Reference accel is not implemented!");
+
+	param_ref_accel_ = false;
 }
 
 void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
@@ -356,8 +365,9 @@ void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
 	if(!use_dirty_derivative_) {
 		std::vector<tinyspline::real> vv = splined(u).result();
 		vel = vv[0];
-		std::vector<tinyspline::real> va = splinedd(u).result();
-		acc = va[0];
+		//std::vector<tinyspline::real> va = splinedd(u).result();
+		//acc = va[0];
+		acc = 0.0;
 	} else {
 		//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
 		double dt = 0.02;
