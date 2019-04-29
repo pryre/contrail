@@ -3,7 +3,6 @@ from rqt_contrail_planner.waypoint import Waypoint
 
 class Movement():
 	def __init__(self, filename="", movement=None):
-		self.is_valid = False
 		self.is_discrete = False
 		self.duration = 0.0
 		self.nom_vel = 0.0
@@ -38,7 +37,6 @@ class Movement():
 						#rospy.loginfo(self.waypoints[i])
 						i+=1
 
-					self.is_valid = True
 			except KeyError as e:
 				rospy.logerr("File malformed: %s" % e)
 		else:

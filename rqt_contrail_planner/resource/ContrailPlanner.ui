@@ -71,7 +71,7 @@
           </size>
          </property>
          <property name="currentIndex">
-          <number>1</number>
+          <number>2</number>
          </property>
          <widget class="QWidget" name="tab_manage">
           <attribute name="title">
@@ -465,7 +465,7 @@
               </widget>
              </item>
              <item row="0" column="1">
-              <widget class="QPushButton" name="button_add">
+              <widget class="QPushButton" name="button_append">
                <property name="sizePolicy">
                 <sizepolicy hsizetype="Minimum" vsizetype="Minimum">
                  <horstretch>0</horstretch>
@@ -473,7 +473,7 @@
                 </sizepolicy>
                </property>
                <property name="text">
-                <string>Add</string>
+                <string>Append</string>
                </property>
               </widget>
              </item>

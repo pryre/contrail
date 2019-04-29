@@ -61,7 +61,12 @@ class Planner(Plugin):
 		# Waypoint
 		self._widget.list_waypoints.currentItemChanged.connect(self.list_item_changed)
 
-		#self._widget.button_cal_gyro.clicked.connect(self.button_cal_gyro_pressed)
+		self._widget.button_insert.clicked.connect(self.button_insert_pressed)
+		self._widget.button_append.clicked.connect(self.button_append_pressed)
+		self._widget.button_overwrite.clicked.connect(self.button_overwrite_pressed)
+		self._widget.button_move_up.clicked.connect(self.button_move_up_pressed)
+		self._widget.button_move_down.clicked.connect(self.button_move_down_pressed)
+		self._widget.button_remove.clicked.connect(self.button_remove_pressed)
 		#self._widget.button_cal_esc.clicked.connect(self.button_cal_esc_pressed)
 		#self._widget.button_cal_rc.clicked.connect(self.button_cal_rc_pressed)
 
@@ -132,11 +137,10 @@ class Planner(Plugin):
 	def update_display(self):
 		self.clear_display()
 
-		if self.loaded_movement.is_valid:
-			self.update_flight_plan()
+		self.update_flight_plan()
 
-			for i in xrange(len(self.loaded_movement.waypoints)):
-				self._widget.list_waypoints.addItem(str(self.loaded_movement.waypoints[i]))
+		for i in xrange(len(self.loaded_movement.waypoints)):
+			self._widget.list_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
 
 	def clear_display(self):
 		self._widget.list_waypoints.clear()
@@ -165,13 +169,12 @@ class Planner(Plugin):
 			self._widget.input_nom_rate.setEnabled(True)
 
 	def list_item_changed(self):
-		if self.loaded_movement.is_valid:
-			wp = self.loaded_movement.waypoints[self._widget.list_waypoints.currentRow()]
+		wp = self.loaded_movement.waypoints[self._widget.list_waypoints.currentRow()]
 
-			self._widget.input_x.setText(str(wp.x))
-			self._widget.input_y.setText(str(wp.y))
-			self._widget.input_z.setText(str(wp.z))
-			self._widget.input_psi.setText(str(wp.yaw))
+		self._widget.input_x.setText(str(wp.x))
+		self._widget.input_y.setText(str(wp.y))
+		self._widget.input_z.setText(str(wp.z))
+		self._widget.input_psi.setText(str(wp.yaw))
 
 	def set_flight_plan(self):
 		mode = self._widget.combobox_mode.currentText()
@@ -197,21 +200,54 @@ class Planner(Plugin):
 		self._widget.input_nom_vel.setText(str(self.loaded_movement.nom_vel))
 		self._widget.input_nom_rate.setText(str(self.loaded_movement.nom_rate))
 
-	#def button_cal_accel_pressed(self):
-	#	self.call_command(241, 0, 0, 0, 0, 1, 0, 0)
-	#	rospy.loginfo("DEBUG: Cal accel button pressed!")
+	def prepare_waypoint(self):
+		return Waypoint(x=self._widget.input_x.text(),
+						y=self._widget.input_y.text(),
+						z=self._widget.input_z.text(),
+						yaw=self._widget.input_psi.text())
 
-	#def button_cal_gyro_pressed(self):
-	#	self.call_command(241, 1, 0, 0, 0, 0, 0, 0)
-	#	rospy.loginfo("DEBUG: Cal gyro button pressed!")
+	def button_insert_pressed(self):
+		ind = self._widget.list_waypoints.currentRow()
+		self.loaded_movement.waypoints.insert(ind, self.prepare_waypoint())
+		self.update_display()
+		self._widget.list_waypoints.setCurrentRow(ind)
 
-	#def button_cal_esc_pressed(self):
-	#	rospy.loginfo(param_set("DO_ESC_CAL", 1))
-	#	rospy.logwarn("If calibrate ESC parameter set, write params and reboot to complete calibration")
-	#	rospy.logwarn("---\n\nMake sure props are detached!\n\n---")
-	#	rospy.loginfo("DEBUG: Cal esc button pressed!")
+	def button_append_pressed(self):
+		ind = self._widget.list_waypoints.currentRow() + 1
+		self.loaded_movement.waypoints.insert(ind, self.prepare_waypoint())
+		self.update_display()
+		self._widget.list_waypoints.setCurrentRow(ind)
 
-	#def button_cal_rc_pressed(self):
-	#	self.call_command(241, 0, 0, 0, 1, 0, 0, 0)
-	#	rospy.loginfo("DEBUG: Cal rc button pressed!")
+	def button_overwrite_pressed(self):
+		ind = self._widget.list_waypoints.currentRow()
+		if (len(self.loaded_movement.waypoints) > ind) and (ind >= 0):
+			self.loaded_movement.waypoints[ind] = self.prepare_waypoint()
+			self.update_display()
+			self._widget.list_waypoints.setCurrentRow(ind)
+
+	def button_move_up_pressed(self):
+		ind = self._widget.list_waypoints.currentRow()
+		if (len(self.loaded_movement.waypoints) > ind) and (ind > 0):
+			self.loaded_movement.waypoints.insert(ind-1, self.loaded_movement.waypoints.pop(ind))
+			self.update_display()
+			self._widget.list_waypoints.setCurrentRow(ind-1)
+
+	def button_move_down_pressed(self):
+		ind = self._widget.list_waypoints.currentRow()
+		if (len(self.loaded_movement.waypoints)-1 > ind) and (ind >= 0):
+			self.loaded_movement.waypoints.insert(ind+1, self.loaded_movement.waypoints.pop(ind))
+			self.update_display()
+			self._widget.list_waypoints.setCurrentRow(ind+1)
+
+	def button_remove_pressed(self):
+		ind = self._widget.list_waypoints.currentRow()
+		if (len(self.loaded_movement.waypoints) > ind) and (ind >= 0):
+			self.loaded_movement.waypoints.pop(ind)
+			self.update_display()
+			self._widget.list_waypoints.setCurrentRow(ind)
+
+
+
+
+
 
