@@ -2,10 +2,14 @@ import os
 import math
 import rospkg
 import rospy
+import yaml
 
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
-from python_qt_binding.QtWidgets import QWidget
+from python_qt_binding.QtWidgets import QWidget, QFileDialog
+
+from rqt_contrail_planner.movement import Movement
+from rqt_contrail_planner.waypoint import Waypoint
 
 class Planner(Plugin):
 	def __init__(self, context):
@@ -45,10 +49,26 @@ class Planner(Plugin):
 		# Add widget to the user interface
 		context.add_widget(self._widget)
 
-		#self._widget.button_cal_accel.clicked.connect(self.button_cal_accel_pressed)
+		# Interface Functionality
+		# Management
+		self._widget.button_load.clicked.connect(self.button_load_pressed)
+		self._widget.button_save.clicked.connect(self.button_save_pressed)
+		self._widget.button_save_as.clicked.connect(self.button_save_as_pressed)
+
+		# Flight Plan
+		self._widget.combobox_mode.currentIndexChanged.connect(self.mode_changed)
+
+		# Waypoint
+		self._widget.list_waypoints.currentItemChanged.connect(self.list_item_changed)
+
 		#self._widget.button_cal_gyro.clicked.connect(self.button_cal_gyro_pressed)
 		#self._widget.button_cal_esc.clicked.connect(self.button_cal_esc_pressed)
 		#self._widget.button_cal_rc.clicked.connect(self.button_cal_rc_pressed)
+
+		# Class Variales
+
+		self.loaded_movement = Movement()
+		self.clear_display()
 
 	def shutdown_plugin(self):
 		pass
@@ -67,6 +87,115 @@ class Planner(Plugin):
 		# Comment in to signal that the plugin has a way to configure
 		# This will enable a setting button (gear icon) in each dock widget title bar
 		# Usually used to open a modal configuration dialog
+
+	def button_save_pressed(self):
+		if not self.loaded_movement.filename:
+			self.button_save_as_pressed()
+
+		if self.loaded_movement.filename:
+			self.set_flight_plan()
+
+			yaml_move = self.loaded_movement.encode_yaml()
+
+			with open(self.loaded_movement.filename, 'w') as outfile:
+				yaml.dump(yaml_move, outfile,default_flow_style = False)
+
+			rospy.loginfo("Movements saved: %s" % self.loaded_movement.filename)
+		else:
+			rospy.logerr("No filename specified!")
+
+	def button_save_as_pressed(self):
+		(name,filt) = QFileDialog.getSaveFileName(caption='Save Movement',filter="YAML (*.yaml)")
+		self.loaded_movement.filename = name
+
+		if self.loaded_movement.filename:
+			self.button_save_pressed()
+		else:
+			rospy.logerr("No filename specified!")
+
+	def button_load_pressed(self):
+		(name,filt) = QFileDialog.getOpenFileName(caption='Open Movement')
+
+		self.loaded_movement = Movement()
+
+		if name:
+			stream = open(name, 'r')
+
+			try:
+				with stream:
+					self.loaded_movement = Movement(filename=name, movement=yaml.safe_load(stream))
+			except yaml.YAMLError as e:
+				rospy.logerror(e)
+
+		self.update_display()
+
+	def update_display(self):
+		self.clear_display()
+
+		if self.loaded_movement.is_valid:
+			self.update_flight_plan()
+
+			for i in xrange(len(self.loaded_movement.waypoints)):
+				self._widget.list_waypoints.addItem(str(self.loaded_movement.waypoints[i]))
+
+	def clear_display(self):
+		self._widget.list_waypoints.clear()
+
+		self._widget.input_x.setText("0.0")
+		self._widget.input_y.setText("0.0")
+		self._widget.input_z.setText("0.0")
+		self._widget.input_psi.setText("0.0")
+
+	def mode_changed(self):
+		mode = self._widget.combobox_mode.currentText()
+
+		if mode == 'Continuous':
+			self._widget.label_duration.setEnabled(True)
+			self._widget.input_duration.setEnabled(True)
+			self._widget.label_nom_vel.setEnabled(False)
+			self._widget.input_nom_vel.setEnabled(False)
+			self._widget.label_nom_rate.setEnabled(False)
+			self._widget.input_nom_rate.setEnabled(False)
+		else: # Discrete
+			self._widget.label_duration.setEnabled(False)
+			self._widget.input_duration.setEnabled(False)
+			self._widget.label_nom_vel.setEnabled(True)
+			self._widget.input_nom_vel.setEnabled(True)
+			self._widget.label_nom_rate.setEnabled(True)
+			self._widget.input_nom_rate.setEnabled(True)
+
+	def list_item_changed(self):
+		if self.loaded_movement.is_valid:
+			wp = self.loaded_movement.waypoints[self._widget.list_waypoints.currentRow()]
+
+			self._widget.input_x.setText(str(wp.x))
+			self._widget.input_y.setText(str(wp.y))
+			self._widget.input_z.setText(str(wp.z))
+			self._widget.input_psi.setText(str(wp.yaw))
+
+	def set_flight_plan(self):
+		mode = self._widget.combobox_mode.currentText()
+
+		if mode == 'Discrete':
+			self.loaded_movement.is_discrete = True
+		else:
+			self.loaded_movement.is_discrete = False
+
+		self.loaded_movement.duration = float(self._widget.input_duration.text())
+		self.loaded_movement.nom_vel = float(self._widget.input_nom_vel.text())
+		self.loaded_movement.nom_rate = float(self._widget.input_nom_rate.text())
+
+	def update_flight_plan(self):
+		self._widget.combobox_mode.currentText()
+
+		if self.loaded_movement.is_discrete:
+			self._widget.combobox_mode.setCurrentIndex(1)
+		else:
+			self._widget.combobox_mode.setCurrentIndex(0)
+
+		self._widget.input_duration.setText(str(self.loaded_movement.duration))
+		self._widget.input_nom_vel.setText(str(self.loaded_movement.nom_vel))
+		self._widget.input_nom_rate.setText(str(self.loaded_movement.nom_rate))
 
 	#def button_cal_accel_pressed(self):
 	#	self.call_command(241, 0, 0, 0, 0, 1, 0, 0)
