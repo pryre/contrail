@@ -6,7 +6,12 @@ import yaml
 
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
-from python_qt_binding.QtWidgets import QWidget, QFileDialog
+from python_qt_binding.QtWidgets import QWidget, QFileDialog, QVBoxLayout
+
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.figure import Figure
+from mpl_toolkits.mplot3d import Axes3D
 
 from rqt_contrail_planner.movement import Movement
 from rqt_contrail_planner.waypoint import Waypoint
@@ -67,12 +72,22 @@ class Planner(Plugin):
 		self._widget.button_move_up.clicked.connect(self.button_move_up_pressed)
 		self._widget.button_move_down.clicked.connect(self.button_move_down_pressed)
 		self._widget.button_remove.clicked.connect(self.button_remove_pressed)
-		#self._widget.button_cal_esc.clicked.connect(self.button_cal_esc_pressed)
-		#self._widget.button_cal_rc.clicked.connect(self.button_cal_rc_pressed)
 
 		# Class Variales
-
 		self.loaded_movement = Movement()
+
+		# this is the Navigation widget
+		# it takes the Canvas widget and a parent
+		self.plot_figure = Figure()
+		self.plot_canvas = FigureCanvas(self.plot_figure)
+		self.plot_toolbar = NavigationToolbar(self.plot_canvas, self._widget.widget_plot)
+		self.plot_ax = self.plot_figure.add_subplot(111, projection='3d')
+
+		plot_layout = QVBoxLayout()
+		plot_layout.addWidget(self.plot_toolbar)
+		plot_layout.addWidget(self.plot_canvas)
+		self._widget.widget_plot.setLayout(plot_layout)
+
 		self.clear_display()
 
 	def shutdown_plugin(self):
@@ -139,8 +154,44 @@ class Planner(Plugin):
 
 		self.update_flight_plan()
 
+		plot_data = [[],[],[]]
 		for i in xrange(len(self.loaded_movement.waypoints)):
 			self._widget.list_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
+			plot_data[0].append(self.loaded_movement.waypoints[i].x)
+			plot_data[1].append(self.loaded_movement.waypoints[i].y)
+			plot_data[2].append(self.loaded_movement.waypoints[i].z)
+
+		self.update_plot(plot_data)
+
+	def update_plot(self, plot_data):
+		self.clear_plot()
+
+		# Plot data
+		self.plot_ax.plot(plot_data[0], plot_data[1], plot_data[2], 'ro')
+		self.plot_ax.plot(plot_data[0], plot_data[1], plot_data[2], 'b-')
+
+		# Calculate nice limits
+		max_range = max([max(plot_data[0])-min(plot_data[0]), max(plot_data[1])-min(plot_data[1]), max(plot_data[2])-min(plot_data[2])]) / 2.0
+
+		mid_x = (max(plot_data[0])+min(plot_data[0])) * 0.5
+		mid_y = (max(plot_data[1])+min(plot_data[1])) * 0.5
+		mid_z = (max(plot_data[2])+min(plot_data[2])) * 0.5
+		self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
+		self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
+		self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
+		self.plot_ax.view_init(azim=-135)
+
+		#self.plot_ax.axis('equal')
+		self.plot_ax.set_xlabel('X (m)')
+		self.plot_ax.set_ylabel('Y (m)')
+		self.plot_ax.set_zlabel('Z (m)')
+
+		# Refresh canvas
+		self.plot_canvas.draw()
+
+	def clear_plot(self):
+		# Discards the old graph
+		self.plot_ax.clear()
 
 	def clear_display(self):
 		self._widget.list_waypoints.clear()
@@ -149,6 +200,8 @@ class Planner(Plugin):
 		self._widget.input_y.setText("0.0")
 		self._widget.input_z.setText("0.0")
 		self._widget.input_psi.setText("0.0")
+
+		self.clear_plot()
 
 	def mode_changed(self):
 		mode = self._widget.combobox_mode.currentText()
