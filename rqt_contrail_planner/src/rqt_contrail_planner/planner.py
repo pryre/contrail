@@ -130,7 +130,7 @@ class Planner(Plugin):
 
 			rospy.loginfo("Movements saved: %s" % self.loaded_movement.filename)
 		else:
-			rospy.logerr("No filename specified!")
+			rospy.logerr("Can't save, no filename set")
 
 	def button_save_as_pressed(self):
 		(name,filt) = QFileDialog.getSaveFileName(caption='Save Movement',filter="YAML (*.yaml)")
@@ -139,7 +139,7 @@ class Planner(Plugin):
 		if self.loaded_movement.filename:
 			self.button_save_pressed()
 		else:
-			rospy.logerr("No filename specified!")
+			rospy.logerr("No filename specified")
 
 	def button_load_pressed(self):
 		(name,filt) = QFileDialog.getOpenFileName(caption='Open Movement')
@@ -165,70 +165,72 @@ class Planner(Plugin):
 		for i in xrange(len(self.loaded_movement.waypoints)):
 			self._widget.list_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
 
+
 		self.update_plot()
 
 	def update_plot(self):
 		self.clear_plot()
 
-		plot_data = [[],[],[]]
-		for i in xrange(len(self.loaded_movement.waypoints)):
-			plot_data[0].append(self.loaded_movement.waypoints[i].x)
-			plot_data[1].append(self.loaded_movement.waypoints[i].y)
-			plot_data[2].append(self.loaded_movement.waypoints[i].z)
+		if len(self.loaded_movement.waypoints):
+			plot_data = [[],[],[]]
+			for i in xrange(len(self.loaded_movement.waypoints)):
+				plot_data[0].append(self.loaded_movement.waypoints[i].x)
+				plot_data[1].append(self.loaded_movement.waypoints[i].y)
+				plot_data[2].append(self.loaded_movement.waypoints[i].z)
 
-		# Plot data
-		x = plot_data[0]
-		y = plot_data[1]
-		z = plot_data[2]
-		n = len(x)
-		xi = x
-		yi = y
-		zi = z
-		ni = n*100
+			# Plot data
+			x = plot_data[0]
+			y = plot_data[1]
+			z = plot_data[2]
+			n = len(x)
+			xi = x
+			yi = y
+			zi = z
+			ni = n*100
 
-		# Waypoint data
-		self.plot_ax.plot(x, y, z, 'ro')
-		self.plot_ax.plot(x, y, z, 'b-')
-		# Plot spline display if in contiuous mode
-		if not self.loaded_movement.is_discrete and (n > 1):
-			t = [float(i) / (n-1) for i in range(n)]
-			ti = [float(i) / (ni-1) for i in range(ni)]
+			# Waypoint data
+			self.plot_ax.plot(x, y, z, 'ro')
+			self.plot_ax.plot(x, y, z, 'b-')
+			# Plot spline display if in contiuous mode
+			if not self.loaded_movement.is_discrete and (n > 1):
+				t = [float(i) / (n-1) for i in range(n)]
+				ti = [float(i) / (ni-1) for i in range(ni)]
 
-			iusx = InterpolatedUnivariateSpline(t, x)
-			iusy = InterpolatedUnivariateSpline(t, y)
-			iusz = InterpolatedUnivariateSpline(t, z)
+				iusx = InterpolatedUnivariateSpline(t, x)
+				iusy = InterpolatedUnivariateSpline(t, y)
+				iusz = InterpolatedUnivariateSpline(t, z)
 
-			xi = iusx(ti)
-			yi = iusy(ti)
-			zi = iusz(ti)
+				xi = iusx(ti)
+				yi = iusy(ti)
+				zi = iusz(ti)
 
-			self.plot_ax.plot(xi, yi, zi, 'g-')
+				self.plot_ax.plot(xi, yi, zi, 'g-')
 
-		# Calculate nice limits
-		minx = min([min(x),min(xi)])
-		miny = min([min(y),min(yi)])
-		minz = min([min(z),min(zi)])
-		maxx = max([max(x),max(xi)])
-		maxy = max([max(y),max(yi)])
-		maxz = max([max(z),max(zi)])
+			# Calculate nice limits
+			minx = min([min(x),min(xi)])
+			miny = min([min(y),min(yi)])
+			minz = min([min(z),min(zi)])
+			maxx = max([max(x),max(xi)])
+			maxy = max([max(y),max(yi)])
+			maxz = max([max(z),max(zi)])
 
-		max_range = max([maxx-minx, maxy-miny, maxz-minz]) / 2.0
+			max_range = max([maxx-minx, maxy-miny, maxz-minz]) / 2.0
 
-		mid_x = (maxx+minx) / 2.0
-		mid_y = (maxy+miny) / 2.0
-		mid_z = (maxz+minz) / 2.0
-		self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
-		self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
-		self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
-		#self.plot_ax.view_init(azim=-135)
+			mid_x = (maxx+minx) / 2.0
+			mid_y = (maxy+miny) / 2.0
+			mid_z = (maxz+minz) / 2.0
+			self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
+			self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
+			self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
+			#self.plot_ax.view_init(azim=-135)
 
-		#self.plot_ax.axis('equal')
-		self.plot_ax.set_xlabel('X (m)')
-		self.plot_ax.set_ylabel('Y (m)')
-		self.plot_ax.set_zlabel('Z (m)')
+			#self.plot_ax.axis('equal')
+			self.plot_ax.set_xlabel('X (m)')
+			self.plot_ax.set_ylabel('Y (m)')
+			self.plot_ax.set_zlabel('Z (m)')
 
-		# Refresh canvas
-		self.plot_canvas.draw()
+			# Refresh canvas
+			self.plot_canvas.draw()
 
 	def clear_plot(self):
 		# Discards the old graph
