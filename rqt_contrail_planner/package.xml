@@ -41,6 +41,9 @@
   <!--   <test_depend>gtest</test_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
 
+  <run_depend>python-scipy</run_depend>
+  <run_depend>python-matplotlib</run_depend>
+
   <run_depend>contrail_msgs</run_depend>
   <run_depend>rospy</run_depend>
   <run_depend>rqt_gui</run_depend>

@@ -4,15 +4,21 @@ import rospkg
 import rospy
 import yaml
 
+# Qt ROS binding for GUI
 from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
 from python_qt_binding.QtWidgets import QWidget, QFileDialog, QVBoxLayout
 
+# MatPlotLib for display backend
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
+# SciPy for spline interpolation
+from scipy.interpolate import Rbf, InterpolatedUnivariateSpline
+
+# Contrail assets
 from rqt_contrail_planner.movement import Movement
 from rqt_contrail_planner.waypoint import Waypoint
 
@@ -79,9 +85,11 @@ class Planner(Plugin):
 		# this is the Navigation widget
 		# it takes the Canvas widget and a parent
 		self.plot_figure = Figure()
+		self.plot_figure.patch.set_facecolor('white')
 		self.plot_canvas = FigureCanvas(self.plot_figure)
 		self.plot_toolbar = NavigationToolbar(self.plot_canvas, self._widget.widget_plot)
 		self.plot_ax = self.plot_figure.add_subplot(111, projection='3d')
+		self.plot_ax.view_init(azim=-135)
 
 		plot_layout = QVBoxLayout()
 		plot_layout.addWidget(self.plot_toolbar)
@@ -154,32 +162,65 @@ class Planner(Plugin):
 
 		self.update_flight_plan()
 
-		plot_data = [[],[],[]]
 		for i in xrange(len(self.loaded_movement.waypoints)):
 			self._widget.list_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
+
+		self.update_plot()
+
+	def update_plot(self):
+		self.clear_plot()
+
+		plot_data = [[],[],[]]
+		for i in xrange(len(self.loaded_movement.waypoints)):
 			plot_data[0].append(self.loaded_movement.waypoints[i].x)
 			plot_data[1].append(self.loaded_movement.waypoints[i].y)
 			plot_data[2].append(self.loaded_movement.waypoints[i].z)
 
-		self.update_plot(plot_data)
-
-	def update_plot(self, plot_data):
-		self.clear_plot()
-
 		# Plot data
-		self.plot_ax.plot(plot_data[0], plot_data[1], plot_data[2], 'ro')
-		self.plot_ax.plot(plot_data[0], plot_data[1], plot_data[2], 'b-')
+		x = plot_data[0]
+		y = plot_data[1]
+		z = plot_data[2]
+		n = len(x)
+		xi = x
+		yi = y
+		zi = z
+		ni = n*100
+
+		# Waypoint data
+		self.plot_ax.plot(x, y, z, 'ro')
+		self.plot_ax.plot(x, y, z, 'b-')
+		# Plot spline display if in contiuous mode
+		if not self.loaded_movement.is_discrete and (n > 1):
+			t = [float(i) / (n-1) for i in range(n)]
+			ti = [float(i) / (ni-1) for i in range(ni)]
+
+			iusx = InterpolatedUnivariateSpline(t, x)
+			iusy = InterpolatedUnivariateSpline(t, y)
+			iusz = InterpolatedUnivariateSpline(t, z)
+
+			xi = iusx(ti)
+			yi = iusy(ti)
+			zi = iusz(ti)
+
+			self.plot_ax.plot(xi, yi, zi, 'g-')
 
 		# Calculate nice limits
-		max_range = max([max(plot_data[0])-min(plot_data[0]), max(plot_data[1])-min(plot_data[1]), max(plot_data[2])-min(plot_data[2])]) / 2.0
+		minx = min([min(x),min(xi)])
+		miny = min([min(y),min(yi)])
+		minz = min([min(z),min(zi)])
+		maxx = max([max(x),max(xi)])
+		maxy = max([max(y),max(yi)])
+		maxz = max([max(z),max(zi)])
 
-		mid_x = (max(plot_data[0])+min(plot_data[0])) * 0.5
-		mid_y = (max(plot_data[1])+min(plot_data[1])) * 0.5
-		mid_z = (max(plot_data[2])+min(plot_data[2])) * 0.5
+		max_range = max([maxx-minx, maxy-miny, maxz-minz]) / 2.0
+
+		mid_x = (maxx+minx) / 2.0
+		mid_y = (maxy+miny) / 2.0
+		mid_z = (maxz+minz) / 2.0
 		self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
 		self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
 		self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
-		self.plot_ax.view_init(azim=-135)
+		#self.plot_ax.view_init(azim=-135)
 
 		#self.plot_ax.axis('equal')
 		self.plot_ax.set_xlabel('X (m)')
@@ -207,6 +248,8 @@ class Planner(Plugin):
 		mode = self._widget.combobox_mode.currentText()
 
 		if mode == 'Continuous':
+			self.loaded_movement.is_discrete = False
+
 			self._widget.label_duration.setEnabled(True)
 			self._widget.input_duration.setEnabled(True)
 			self._widget.label_nom_vel.setEnabled(False)
@@ -214,12 +257,16 @@ class Planner(Plugin):
 			self._widget.label_nom_rate.setEnabled(False)
 			self._widget.input_nom_rate.setEnabled(False)
 		else: # Discrete
+			self.loaded_movement.is_discrete = True
+
 			self._widget.label_duration.setEnabled(False)
 			self._widget.input_duration.setEnabled(False)
 			self._widget.label_nom_vel.setEnabled(True)
 			self._widget.input_nom_vel.setEnabled(True)
 			self._widget.label_nom_rate.setEnabled(True)
 			self._widget.input_nom_rate.setEnabled(True)
+
+		self.update_plot()
 
 	def list_item_changed(self):
 		wp = self.loaded_movement.waypoints[self._widget.list_waypoints.currentRow()]
@@ -298,9 +345,3 @@ class Planner(Plugin):
 			self.loaded_movement.waypoints.pop(ind)
 			self.update_display()
 			self._widget.list_waypoints.setCurrentRow(ind)
-
-
-
-
-
-
