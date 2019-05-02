@@ -1,4 +1,4 @@
-
+import rospy
 from rqt_contrail_planner.waypoint import Waypoint
 
 class Movement():
@@ -38,7 +38,7 @@ class Movement():
 						i+=1
 
 			except KeyError as e:
-				rospy.logerr("File malformed: %s" % e)
+				rospy.logerr("File malformed (likely missing: %s)" % str(e))
 		else:
 			rospy.logerr("File not recognised!")
 
@@ -48,8 +48,8 @@ class Movement():
 
 		if self.is_discrete:
 			yaml_move['waypoints']['mode'] = 'discrete'
-			yaml_move['waypoints']['duration'] = float(self.nom_vel)
-			yaml_move['waypoints']['duration'] = float(self.nom_rate)
+			yaml_move['waypoints']['nominal_velocity'] = float(self.nom_vel)
+			yaml_move['waypoints']['nominal_yawrate'] = float(self.nom_rate)
 		else:
 			yaml_move['waypoints']['mode'] = 'continuous'
 			yaml_move['waypoints']['duration'] = float(self.duration)

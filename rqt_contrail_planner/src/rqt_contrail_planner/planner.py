@@ -65,6 +65,7 @@ class Planner(Plugin):
 		self._widget.button_load.clicked.connect(self.button_load_pressed)
 		self._widget.button_save.clicked.connect(self.button_save_pressed)
 		self._widget.button_save_as.clicked.connect(self.button_save_as_pressed)
+		self._widget.button_reset.clicked.connect(self.button_reset_pressed)
 
 		# Flight Plan
 		self._widget.combobox_mode.currentIndexChanged.connect(self.mode_changed)
@@ -72,7 +73,6 @@ class Planner(Plugin):
 		# Waypoint
 		self._widget.table_waypoints.currentItemChanged.connect(self.list_item_changed)
 		#self._widget.table_waypoints.itemChanged.connect(self.waypoint_item_changed)
-		print(self._widget.table_waypoints.horizontalHeaderItem(1).text())
 		self._widget.input_x.returnPressed.connect(self.button_overwrite_pressed)
 		self._widget.input_y.returnPressed.connect(self.button_overwrite_pressed)
 		self._widget.input_z.returnPressed.connect(self.button_overwrite_pressed)
@@ -86,7 +86,7 @@ class Planner(Plugin):
 		self._widget.button_remove.clicked.connect(self.button_remove_pressed)
 
 		# Class Variales
-		self.loaded_movement = Movement()
+		#self.loaded_movement = Movement()
 
 		# this is the Navigation widget
 		# it takes the Canvas widget and a parent
@@ -95,14 +95,13 @@ class Planner(Plugin):
 		self.plot_canvas = FigureCanvas(self.plot_figure)
 		self.plot_toolbar = NavigationToolbar(self.plot_canvas, self._widget.widget_plot)
 		self.plot_ax = self.plot_figure.add_subplot(111, projection='3d')
-		self.plot_ax.view_init(azim=-135)
 
 		plot_layout = QVBoxLayout()
 		plot_layout.addWidget(self.plot_toolbar)
 		plot_layout.addWidget(self.plot_canvas)
 		self._widget.widget_plot.setLayout(plot_layout)
 
-		self.clear_display()
+		self.reset_flight_plan()
 
 	def shutdown_plugin(self):
 		pass
@@ -150,8 +149,6 @@ class Planner(Plugin):
 	def button_load_pressed(self):
 		(name,filt) = QFileDialog.getOpenFileName(caption='Open Movement')
 
-		self.loaded_movement = Movement()
-
 		if name:
 			stream = open(name, 'r')
 
@@ -163,12 +160,20 @@ class Planner(Plugin):
 
 		self.update_display()
 
+	def button_reset_pressed(self):
+		self.reset_flight_plan()
+
+	def reset_flight_plan(self):
+		self.plot_ax.view_init(azim=-135)
+
+		self.loaded_movement = Movement()
+
+		self.update_display()
+
 	def update_display(self):
 		self.clear_display()
 
 		self.update_flight_plan()
-
-		self._widget.table_waypoints.setRowCount(0)
 
 		for i in xrange(len(self.loaded_movement.waypoints)):
 			self._widget.table_waypoints.insertRow(i)
@@ -253,31 +258,32 @@ class Planner(Plugin):
 			mid_x = (maxx+minx) / 2.0
 			mid_y = (maxy+miny) / 2.0
 			mid_z = (maxz+minz) / 2.0
-			self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
-			self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
-			self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
-			#self.plot_ax.view_init(azim=-135)
+			if max_range:
+				self.plot_ax.set_xlim(mid_x - max_range, mid_x + max_range)
+				self.plot_ax.set_ylim(mid_y - max_range, mid_y + max_range)
+				self.plot_ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
-			#self.plot_ax.axis('equal')
-			self.plot_ax.set_xlabel('X (m)')
-			self.plot_ax.set_ylabel('Y (m)')
-			self.plot_ax.set_zlabel('Z (m)')
+		#self.plot_ax.axis('equal')
+		self.plot_ax.set_xlabel('X (m)')
+		self.plot_ax.set_ylabel('Y (m)')
+		self.plot_ax.set_zlabel('Z (m)')
 
-			# Refresh canvas
-			self.plot_canvas.draw()
+		# Refresh canvas
+		self.plot_canvas.draw()
 
 	def clear_plot(self):
 		# Discards the old graph
 		self.plot_ax.clear()
 
-	def clear_display(self):
-		self._widget.table_waypoints.clear()
-
+	def clear_inputs(self):
 		self._widget.input_x.setText("0.0")
 		self._widget.input_y.setText("0.0")
 		self._widget.input_z.setText("0.0")
 		self._widget.input_psi.setText("0.0")
 
+	def clear_display(self):
+		self._widget.table_waypoints.setRowCount(0)
+		self.clear_inputs()
 		self.clear_plot()
 
 	def mode_changed(self):
@@ -322,12 +328,16 @@ class Planner(Plugin):
 	#		self.update_plot()
 
 	def list_item_changed(self):
-		wp = self.loaded_movement.waypoints[self._widget.table_waypoints.currentRow()]
+		ind = self._widget.table_waypoints.currentRow()
+		if ind >= 0:
+			wp = self.loaded_movement.waypoints[ind]
 
-		self._widget.input_x.setText(str(wp.x))
-		self._widget.input_y.setText(str(wp.y))
-		self._widget.input_z.setText(str(wp.z))
-		self._widget.input_psi.setText(str(wp.yaw))
+			self._widget.input_x.setText(str(wp.x))
+			self._widget.input_y.setText(str(wp.y))
+			self._widget.input_z.setText(str(wp.z))
+			self._widget.input_psi.setText(str(wp.yaw))
+		else:
+			self.clear_inputs()
 
 		self.update_plot()
 
@@ -368,7 +378,7 @@ class Planner(Plugin):
 		self._widget.table_waypoints.selectRow(ind)
 
 	def button_append_pressed(self):
-		ind = self._widget.table_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow() + 1
 		self.loaded_movement.waypoints.insert(ind, self.prepare_waypoint())
 		self.update_display()
 		self._widget.table_waypoints.selectRow(ind)
@@ -399,4 +409,4 @@ class Planner(Plugin):
 		if (len(self.loaded_movement.waypoints) > ind) and (ind >= 0):
 			self.loaded_movement.waypoints.pop(ind)
 			self.update_display()
-			self._widget.table_waypoints.selectRow(ind)
+			self._widget.table_waypoints.selectRow(ind-1)
