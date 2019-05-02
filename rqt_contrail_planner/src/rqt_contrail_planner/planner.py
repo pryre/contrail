@@ -6,8 +6,8 @@ import yaml
 
 # Qt ROS binding for GUI
 from qt_gui.plugin import Plugin
-from python_qt_binding import loadUi
-from python_qt_binding.QtWidgets import QWidget, QFileDialog, QVBoxLayout
+from python_qt_binding import loadUi, QtCore
+from python_qt_binding.QtWidgets import QWidget, QFileDialog, QVBoxLayout, QTableWidgetItem
 
 # MatPlotLib for display backend
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
 # SciPy for spline interpolation
-from scipy.interpolate import Rbf, InterpolatedUnivariateSpline
+from scipy.interpolate import InterpolatedUnivariateSpline
 
 # Contrail assets
 from rqt_contrail_planner.movement import Movement
@@ -70,7 +70,13 @@ class Planner(Plugin):
 		self._widget.combobox_mode.currentIndexChanged.connect(self.mode_changed)
 
 		# Waypoint
-		self._widget.list_waypoints.currentItemChanged.connect(self.list_item_changed)
+		self._widget.table_waypoints.currentItemChanged.connect(self.list_item_changed)
+		#self._widget.table_waypoints.itemChanged.connect(self.waypoint_item_changed)
+		print(self._widget.table_waypoints.horizontalHeaderItem(1).text())
+		self._widget.input_x.returnPressed.connect(self.button_overwrite_pressed)
+		self._widget.input_y.returnPressed.connect(self.button_overwrite_pressed)
+		self._widget.input_z.returnPressed.connect(self.button_overwrite_pressed)
+		self._widget.input_psi.returnPressed.connect(self.button_overwrite_pressed)
 
 		self._widget.button_insert.clicked.connect(self.button_insert_pressed)
 		self._widget.button_append.clicked.connect(self.button_append_pressed)
@@ -162,9 +168,25 @@ class Planner(Plugin):
 
 		self.update_flight_plan()
 
-		for i in xrange(len(self.loaded_movement.waypoints)):
-			self._widget.list_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
+		self._widget.table_waypoints.setRowCount(0)
 
+		for i in xrange(len(self.loaded_movement.waypoints)):
+			self._widget.table_waypoints.insertRow(i)
+			item_x = QTableWidgetItem(str(self.loaded_movement.waypoints[i].x))
+			item_y = QTableWidgetItem(str(self.loaded_movement.waypoints[i].y))
+			item_z = QTableWidgetItem(str(self.loaded_movement.waypoints[i].z))
+			item_yaw = QTableWidgetItem(str(self.loaded_movement.waypoints[i].yaw))
+			item_x.setTextAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+			item_y.setTextAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+			item_z.setTextAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+			item_yaw.setTextAlignment(QtCore.Qt.AlignVCenter | QtCore.Qt.AlignRight)
+			self._widget.table_waypoints.setItem(i, 0, item_x)
+			self._widget.table_waypoints.setItem(i, 1, item_y)
+			self._widget.table_waypoints.setItem(i, 2, item_z)
+			self._widget.table_waypoints.setItem(i, 3, item_yaw)
+			#	   QtGui.QTableItem(str(self.loaded_movement.waypoints[i].x)),
+			#self._widget.table_waypoints.appendRow(row)
+			#self._widget.table_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
 
 		self.update_plot()
 
@@ -186,25 +208,37 @@ class Planner(Plugin):
 			xi = x
 			yi = y
 			zi = z
-			ni = n*100
+			ni = n*10
 
 			# Waypoint data
-			self.plot_ax.plot(x, y, z, 'ro')
-			self.plot_ax.plot(x, y, z, 'b-')
-			# Plot spline display if in contiuous mode
 			if not self.loaded_movement.is_discrete and (n > 1):
-				t = [float(i) / (n-1) for i in range(n)]
-				ti = [float(i) / (ni-1) for i in range(ni)]
+				self.plot_ax.plot(x, y, z, 'b--')
 
-				iusx = InterpolatedUnivariateSpline(t, x)
-				iusy = InterpolatedUnivariateSpline(t, y)
-				iusz = InterpolatedUnivariateSpline(t, z)
+				# Plot spline display if in contiuous mode
+				try:
+					t = [float(i) / (n-1) for i in range(n)]
+					ti = [float(i) / (ni-1) for i in range(ni)]
 
-				xi = iusx(ti)
-				yi = iusy(ti)
-				zi = iusz(ti)
+					iusx = InterpolatedUnivariateSpline(t, x)
+					iusy = InterpolatedUnivariateSpline(t, y)
+					iusz = InterpolatedUnivariateSpline(t, z)
 
-				self.plot_ax.plot(xi, yi, zi, 'g-')
+					xi = iusx(ti)
+					yi = iusy(ti)
+					zi = iusz(ti)
+
+					self.plot_ax.plot(xi, yi, zi, 'g-')
+				except:
+					pass
+			else:
+				self.plot_ax.plot(x, y, z, 'g-')
+
+
+			self.plot_ax.plot(x, y, z, 'bo')
+
+			sel_ind = self._widget.table_waypoints.currentRow()
+			if sel_ind >= 0:
+				self.plot_ax.plot([x[sel_ind]], [y[sel_ind]], [z[sel_ind]], 'ro')
 
 			# Calculate nice limits
 			minx = min([min(x),min(xi)])
@@ -237,7 +271,7 @@ class Planner(Plugin):
 		self.plot_ax.clear()
 
 	def clear_display(self):
-		self._widget.list_waypoints.clear()
+		self._widget.table_waypoints.clear()
 
 		self._widget.input_x.setText("0.0")
 		self._widget.input_y.setText("0.0")
@@ -270,13 +304,32 @@ class Planner(Plugin):
 
 		self.update_plot()
 
+	#def waypoint_item_changed(self, item):
+	#	if item:
+	#		ind = item.row()
+	#		dind = item.column()
+	#		data = float(item.text())
+	#		if dind == 0:
+	#			self.loaded_movement.waypoints[ind].x = data
+	#		elif dind == 1:
+	#			self.loaded_movement.waypoints[ind].y = data
+	#		elif dind == 2:
+	#			self.loaded_movement.waypoints[ind].z = data
+	#		elif dind == 3:
+	#			self.loaded_movement.waypoints[ind].yaw = data
+	#
+	#		self.list_item_changed()
+	#		self.update_plot()
+
 	def list_item_changed(self):
-		wp = self.loaded_movement.waypoints[self._widget.list_waypoints.currentRow()]
+		wp = self.loaded_movement.waypoints[self._widget.table_waypoints.currentRow()]
 
 		self._widget.input_x.setText(str(wp.x))
 		self._widget.input_y.setText(str(wp.y))
 		self._widget.input_z.setText(str(wp.z))
 		self._widget.input_psi.setText(str(wp.yaw))
+
+		self.update_plot()
 
 	def set_flight_plan(self):
 		mode = self._widget.combobox_mode.currentText()
@@ -309,41 +362,41 @@ class Planner(Plugin):
 						yaw=self._widget.input_psi.text())
 
 	def button_insert_pressed(self):
-		ind = self._widget.list_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow()
 		self.loaded_movement.waypoints.insert(ind, self.prepare_waypoint())
 		self.update_display()
-		self._widget.list_waypoints.setCurrentRow(ind)
+		self._widget.table_waypoints.selectRow(ind)
 
 	def button_append_pressed(self):
-		ind = self._widget.list_waypoints.currentRow() + 1
+		ind = self._widget.table_waypoints.currentRow()
 		self.loaded_movement.waypoints.insert(ind, self.prepare_waypoint())
 		self.update_display()
-		self._widget.list_waypoints.setCurrentRow(ind)
+		self._widget.table_waypoints.selectRow(ind)
 
 	def button_overwrite_pressed(self):
-		ind = self._widget.list_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow()
 		if (len(self.loaded_movement.waypoints) > ind) and (ind >= 0):
 			self.loaded_movement.waypoints[ind] = self.prepare_waypoint()
 			self.update_display()
-			self._widget.list_waypoints.setCurrentRow(ind)
+			self._widget.table_waypoints.selectRow(ind)
 
 	def button_move_up_pressed(self):
-		ind = self._widget.list_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow()
 		if (len(self.loaded_movement.waypoints) > ind) and (ind > 0):
 			self.loaded_movement.waypoints.insert(ind-1, self.loaded_movement.waypoints.pop(ind))
 			self.update_display()
-			self._widget.list_waypoints.setCurrentRow(ind-1)
+			self._widget.table_waypoints.selectRow(ind-1)
 
 	def button_move_down_pressed(self):
-		ind = self._widget.list_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow()
 		if (len(self.loaded_movement.waypoints)-1 > ind) and (ind >= 0):
 			self.loaded_movement.waypoints.insert(ind+1, self.loaded_movement.waypoints.pop(ind))
 			self.update_display()
-			self._widget.list_waypoints.setCurrentRow(ind+1)
+			self._widget.table_waypoints.selectRow(ind+1)
 
 	def button_remove_pressed(self):
-		ind = self._widget.list_waypoints.currentRow()
+		ind = self._widget.table_waypoints.currentRow()
 		if (len(self.loaded_movement.waypoints) > ind) and (ind >= 0):
 			self.loaded_movement.waypoints.pop(ind)
 			self.update_display()
-			self._widget.list_waypoints.setCurrentRow(ind)
+			self._widget.table_waypoints.selectRow(ind)
