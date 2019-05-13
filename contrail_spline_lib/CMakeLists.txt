@@ -105,7 +105,7 @@ catkin_python_setup()
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
-  LIBRARIES quintic_spline_solver _quintic_spline_solver_wrapper_cpp
+  LIBRARIES quintic_spline _quintic_spline_solver_wrapper_cpp _interpolated_quintic_spline_wrapper_cpp
   CATKIN_DEPENDS roscpp
   DEPENDS EIGEN3
 )
@@ -125,13 +125,14 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(quintic_spline_solver src/contrail_spline_lib/quintic_spline_solver.cpp)
+add_library(quintic_spline src/contrail_spline_lib/quintic_spline_solver.cpp src/contrail_spline_lib/interpolated_quintic_spline.cpp)
 add_library(_quintic_spline_solver_wrapper_cpp src/contrail_spline_lib/_quintic_spline_solver_wrapper_cpp.cpp)
+add_library(_interpolated_quintic_spline_wrapper_cpp src/contrail_spline_lib/_interpolated_quintic_spline_wrapper_cpp.cpp)
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-add_dependencies(quintic_spline_solver ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+add_dependencies(quintic_spline ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(_quintic_spline_solver_wrapper_cpp ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
@@ -150,20 +151,30 @@ add_dependencies(_quintic_spline_solver_wrapper_cpp ${${PROJECT_NAME}_EXPORTED_T
 # add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(quintic_spline_solver
+target_link_libraries(quintic_spline
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )
 
 target_link_libraries(_quintic_spline_solver_wrapper_cpp
-  quintic_spline_solver
+  quintic_spline
   ${catkin_LIBRARIES}
   ${Boost_LIBRARIES}
 )
 
+target_link_libraries(_interpolated_quintic_spline_wrapper_cpp
+  quintic_spline
+  ${catkin_LIBRARIES}
+  ${Boost_LIBRARIES}
+)
 
 # Don't prepend wrapper library name with lib and add to Python libs.
 set_target_properties(_quintic_spline_solver_wrapper_cpp PROPERTIES
+  PREFIX ""
+  LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_PYTHON_DESTINATION}
+)
+
+set_target_properties(_interpolated_quintic_spline_wrapper_cpp PROPERTIES
   PREFIX ""
   LIBRARY_OUTPUT_DIRECTORY ${CATKIN_DEVEL_PREFIX}/${CATKIN_PACKAGE_PYTHON_DESTINATION}
 )
