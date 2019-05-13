@@ -15,12 +15,11 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 from mpl_toolkits.mplot3d import Axes3D
 
-# SciPy for spline interpolation
-from scipy.interpolate import InterpolatedUnivariateSpline
-
 # Contrail assets
 from rqt_contrail_planner.movement import Movement
 from rqt_contrail_planner.waypoint import Waypoint
+
+from contrail_spline_lib._quintic_spline_wrapper_py import InterpolatedQuinticSpline
 
 class Planner(Plugin):
 	def __init__(self, context):
@@ -87,6 +86,7 @@ class Planner(Plugin):
 
 		# Class Variales
 		#self.loaded_movement = Movement()
+		#self.num_interp = 10
 
 		# this is the Navigation widget
 		# it takes the Canvas widget and a parent
@@ -107,19 +107,14 @@ class Planner(Plugin):
 		pass
 
 	def save_settings(self, plugin_settings, instance_settings):
-		# TODO save intrinsic configuration, usually using:
-		# instance_settings.set_value(k, v)
-		pass
+		instance_settings.set_value("num_interp", self.num_interp)
 
 	def restore_settings(self, plugin_settings, instance_settings):
-		# TODO restore intrinsic configuration, usually using:
-		# v = instance_settings.value(k)
-		pass
+		if instance_settings.value("num_interp") is not None:
+			self.num_interp = int( instance_settings.value("num_interp") )
 
 	#def trigger_configuration(self):
-		# Comment in to signal that the plugin has a way to configure
-		# This will enable a setting button (gear icon) in each dock widget title bar
-		# Usually used to open a modal configuration dialog
+		#TODO: allow user to set 'self.num_interp'
 
 	def button_save_pressed(self):
 		if not self.loaded_movement.filename:
@@ -189,9 +184,6 @@ class Planner(Plugin):
 			self._widget.table_waypoints.setItem(i, 1, item_y)
 			self._widget.table_waypoints.setItem(i, 2, item_z)
 			self._widget.table_waypoints.setItem(i, 3, item_yaw)
-			#	   QtGui.QTableItem(str(self.loaded_movement.waypoints[i].x)),
-			#self._widget.table_waypoints.appendRow(row)
-			#self._widget.table_waypoints.addItem(str(i) + ": " + str(self.loaded_movement.waypoints[i]))
 
 		self.update_plot()
 
@@ -213,31 +205,29 @@ class Planner(Plugin):
 			xi = x
 			yi = y
 			zi = z
-			ni = n*10
+			ni = n
 
 			# Waypoint data
 			if not self.loaded_movement.is_discrete and (n > 1):
 				self.plot_ax.plot(x, y, z, 'b--')
 
 				# Plot spline display if in contiuous mode
-				try:
-					t = [float(i) / (n-1) for i in range(n)]
-					ti = [float(i) / (ni-1) for i in range(ni)]
+				iqs_x = InterpolatedQuinticSpline()
+				iqs_y = InterpolatedQuinticSpline()
+				iqs_z = InterpolatedQuinticSpline()
 
-					iusx = InterpolatedUnivariateSpline(t, x)
-					iusy = InterpolatedUnivariateSpline(t, y)
-					iusz = InterpolatedUnivariateSpline(t, z)
-
-					xi = iusx(ti)
-					yi = iusy(ti)
-					zi = iusz(ti)
+				if iqs_x.interpolate(x) and iqs_y.interpolate(y) and iqs_z.interpolate(z):
+					ni = n*self.num_interp
+					ui = [float(i) / (ni-1) for i in range(ni)]
+					xi = [iqs_x.lookup(u)[0] for u in ui]
+					yi = [iqs_y.lookup(u)[0] for u in ui]
+					zi = [iqs_z.lookup(u)[0] for u in ui]
 
 					self.plot_ax.plot(xi, yi, zi, 'g-')
-				except:
-					pass
+				else:
+					rospy.logerror("Could not interpolate spline!")
 			else:
 				self.plot_ax.plot(x, y, z, 'g-')
-
 
 			self.plot_ax.plot(x, y, z, 'bo')
 
