@@ -1,1 +1,2 @@
-from contrail_spline_lib._quintic_spline_solver_wrapper_py import QuinticSplineSolver
+from contrail_spline_lib._quintic_spline_wrapper_py import QuinticSplineSolver
+from contrail_spline_lib._quintic_spline_wrapper_py import InterpolatedQuinticSpline

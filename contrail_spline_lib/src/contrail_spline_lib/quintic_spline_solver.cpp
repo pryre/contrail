@@ -2,24 +2,15 @@
 
 #include <eigen3/Eigen/Dense>
 
-#include <vector>
-#include <stdio.h>
 #include <math.h>
 
 using namespace contrail_spline_lib;
-
-void QuinticSplineSolver::add( std::vector<double> vec ) {
-	for(size_t i = 0; i < vec.size(); i++) {
-		printf("%i: %0.4f\n", (int)i, vec[i]);
-	}
-}
-
 
 Eigen::VectorXd QuinticSplineSolver::linear_derivative_est( const Eigen::VectorXd& vias, const double dt ) {
 	Eigen::VectorXd dvias = Eigen::VectorXd::Zero(vias.size());
 
 	if( vias.size() > 2 ) {
-		for(int i=2; i < (vias.size()-1); i++) {
+		for(int i=1; i < (vias.size()-1); i++) {
 			double qp = vias(i-1);
             double qc = vias(i);
             double qn = vias(i+1);
@@ -35,6 +26,8 @@ Eigen::VectorXd QuinticSplineSolver::linear_derivative_est( const Eigen::VectorX
             }
 		}
 	}
+
+	return dvias;
 }
 
 quintic_spline_coeffs_t QuinticSplineSolver::solver( const double q0,

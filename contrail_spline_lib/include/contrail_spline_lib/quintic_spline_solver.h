@@ -9,8 +9,6 @@ namespace contrail_spline_lib {
 
 class QuinticSplineSolver {
 	public:
-		void add( std::vector<double> vec );
-
 		quintic_spline_coeffs_t solver( const double q0,
 										const double qd0,
 										const double qdd0,

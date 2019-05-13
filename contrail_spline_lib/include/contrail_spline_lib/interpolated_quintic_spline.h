@@ -4,6 +4,8 @@
 #include <contrail_spline_lib/quintic_spline_types.h>
 #include <contrail_spline_lib/quintic_spline_solver.h>
 
+#include <eigen3/Eigen/Dense>
+
 #include <vector>
 
 namespace contrail_spline_lib {
@@ -31,11 +33,6 @@ class InterpolatedQuinticSpline {
 		const Eigen::VectorXd& get_ddvias( void );
 
 		quintic_spline_point_t lookup( double u );
-
-	private:
-
-
-
 };
 
 }
