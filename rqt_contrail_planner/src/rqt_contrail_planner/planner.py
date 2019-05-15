@@ -110,8 +110,10 @@ class Planner(Plugin):
 		instance_settings.set_value("num_interp", self.num_interp)
 
 	def restore_settings(self, plugin_settings, instance_settings):
-		if instance_settings.value("num_interp") is not None:
+		try:
 			self.num_interp = int( instance_settings.value("num_interp") )
+		except AttributeError:
+			self.num_interp = 10
 
 	#def trigger_configuration(self):
 		#TODO: allow user to set 'self.num_interp'
