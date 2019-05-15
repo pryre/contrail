@@ -11,7 +11,9 @@
 
 #include <contrail/ManagerParamsConfig.h>
 
-#include <tinyspline_ros/tinysplinecpp.h>
+//#include <tinyspline_ros/tinysplinecpp.h>
+#include <contrail_spline_lib/InterpolateQuinticSpline.h>
+
 #include <actionlib/server/simple_action_server.h>
 #include <contrail/TrajectoryAction.h>
 
@@ -46,6 +48,7 @@ class ContrailManager {
 		Eigen::Vector3d spline_pos_end_;
 		double spline_rot_start_;
 		double spline_rot_end_;
+		/*
 		tinyspline::BSpline spline_x_;
 		tinyspline::BSpline spline_xd_;
 		tinyspline::BSpline spline_xdd_;
@@ -59,6 +62,11 @@ class ContrailManager {
 		tinyspline::BSpline spline_rd_;
 		tinyspline::BSpline spline_rdd_;
 		bool use_dirty_derivative_;
+		*/
+		contrail_spline_lib::InterpolatedQuinticSpline spline_x_;
+		contrail_spline_lib::InterpolatedQuinticSpline spline_y_;
+		contrail_spline_lib::InterpolatedQuinticSpline spline_z_;
+		contrail_spline_lib::InterpolatedQuinticSpline spline_r_;
 
 		Eigen::Vector3d output_pos_last_;
 		double output_rot_last_;

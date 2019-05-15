@@ -91,6 +91,27 @@ void ContrailManager::set_action_goal( void ) {
 		spline_start_ = ( goal->start == ros::Time(0) ) ? tc : goal->start;
 		spline_duration_ = goal->duration;
 
+		std::vector<double>positions_yaw = goal->yaws;
+		make_yaw_continuous(positions_yaw);
+
+		Eigen::VectorXd vias_x = Eigen::VectorXd::Zero(goal->positions.size());
+		Eigen::VectorXd vias_y = Eigen::VectorXd::Zero(goal->positions.size());
+		Eigen::VectorXd vias_z = Eigen::VectorXd::Zero(goal->positions.size());
+		Eigen::VectorXd vias_r = Eigen::VectorXd::Zero(goal->positions.size());
+
+		for(int i=0; i<goal->positions.size(); i++) {
+			vias_x(i) = goal->positions[i].x;
+			vias_y(i) = goal->positions[i].y;
+			vias_z(i) = goal->positions[i].z;
+			vias_r(i) = positions_yaw[i];
+		}
+
+		spline_x_.interpolate(vias_x);
+		spline_y_.interpolate(vias_y);
+		spline_z_.interpolate(vias_z);
+		spline_r_.interpolate(vias_r);
+
+		/*
 		std::vector<double>positions_x;
 		std::vector<double>positions_y;
 		std::vector<double>positions_z;
@@ -148,6 +169,7 @@ void ContrailManager::set_action_goal( void ) {
 			use_dirty_derivative_ = true;
 			ROS_WARN("Unable to calculate derivative splines, using dirty derivative");
 		}
+		*/
 
 		spline_pos_start_ = vector_from_msg(goal->positions.front());
 		spline_pos_end_ = vector_from_msg(goal->positions.back());
