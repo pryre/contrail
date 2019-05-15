@@ -10,8 +10,9 @@
 #include <geometry_msgs/Quaternion.h>
 
 #include <contrail/TrajectoryAction.h>
-
 #include <contrail/ManagerParamsConfig.h>
+#include <contrail_spline_lib/quintic_spline_types.h>
+#include <contrail_spline_lib/interpolated_quintic_spline.h>
 
 #include <mavros_msgs/PositionTarget.h>
 
@@ -31,12 +32,12 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 	param_spline_approx_res_(0),
 	param_end_position_accuracy_(0.0),
 	param_end_yaw_accuracy_(0.0),
-	param_ref_accel_(false),
+	param_ref_velocity_(false),
+	param_ref_acceleration_(false),
 	spline_start_(0),
 	spline_duration_(0),
 	spline_in_progress_(false),
 	wait_reached_end_(false),
-	use_dirty_derivative_(false),
 	as_(nhp, "contrail", false),
 	dyncfg_settings_(ros::NodeHandle(nhp, "contrail")) {
 
@@ -106,70 +107,10 @@ void ContrailManager::set_action_goal( void ) {
 			vias_r(i) = positions_yaw[i];
 		}
 
-		spline_x_.interpolate(vias_x);
-		spline_y_.interpolate(vias_y);
-		spline_z_.interpolate(vias_z);
-		spline_r_.interpolate(vias_r);
-
-		/*
-		std::vector<double>positions_x;
-		std::vector<double>positions_y;
-		std::vector<double>positions_z;
-
-		for(int i=0; i<goal->positions.size(); i++) {
-			positions_x.push_back(goal->positions[i].x);
-			positions_y.push_back(goal->positions[i].y);
-			positions_z.push_back(goal->positions[i].z);
-		}
-
-		std::vector<double>positions_yaw = goal->yaws;
-		make_yaw_continuous(positions_yaw);
-
-		spline_x_ = tinyspline::Utils::interpolateCubic(&positions_x, 1);
-		spline_y_ = tinyspline::Utils::interpolateCubic(&positions_y, 1);
-		spline_z_ = tinyspline::Utils::interpolateCubic(&positions_z, 1);
-		spline_r_ = tinyspline::Utils::interpolateCubic(&positions_yaw, 1);
-
-		//Smooth out control points to give a nicer fit
-		std::vector<tinyspline::real> ctrlp_x = spline_x_.controlPoints();
-		std::vector<tinyspline::real> ctrlp_y = spline_y_.controlPoints();
-		std::vector<tinyspline::real> ctrlp_z = spline_z_.controlPoints();
-		std::vector<tinyspline::real> ctrlp_r = spline_r_.controlPoints();
-		ROS_ASSERT_MSG( ctrlp_x.size() >= 4, "Number of pos_x control points is <4 (%i)", (int)ctrlp_x.size());
-		ROS_ASSERT_MSG( ctrlp_y.size() >= 4, "Number of pos_y control points is <4 (%i)", (int)ctrlp_y.size());
-		ROS_ASSERT_MSG( ctrlp_z.size() >= 4, "Number of pos_z control points is <4 (%i)", (int)ctrlp_z.size());
-		ROS_ASSERT_MSG( ctrlp_r.size() >= 4, "Number of yaw control points is <4 (%i)", (int)ctrlp_r.size());
-
-		ctrlp_x.at(1) = ctrlp_x.front();
-		ctrlp_x.at(ctrlp_x.size() - 2) = ctrlp_x.back();
-		spline_x_.setControlPoints(ctrlp_x);
-		ctrlp_y.at(1) = ctrlp_y.front();
-		ctrlp_y.at(ctrlp_y.size() - 2) = ctrlp_y.back();
-		spline_y_.setControlPoints(ctrlp_y);
-		ctrlp_z.at(1) = ctrlp_z.front();
-		ctrlp_z.at(ctrlp_z.size() - 2) = ctrlp_z.back();
-		spline_z_.setControlPoints(ctrlp_z);
-		ctrlp_r.at(1) = ctrlp_r.front();
-		ctrlp_r.at(ctrlp_r.size() - 2) = ctrlp_r.back();
-		spline_r_.setControlPoints(ctrlp_r);
-
-		try {
-			spline_xd_ = spline_x_.derive();
-			spline_yd_ = spline_y_.derive();
-			spline_zd_ = spline_z_.derive();
-			spline_rd_ = spline_r_.derive();
-			//spline_xdd_ = spline_xd_.derive();
-			//spline_ydd_ = spline_yd_.derive();
-			//spline_zdd_ = spline_zd_.derive();
-			//spline_rdd_ = spline_rd_.derive();
-
-			use_dirty_derivative_ = false;
-		}
-		catch(std::runtime_error) {
-			use_dirty_derivative_ = true;
-			ROS_WARN("Unable to calculate derivative splines, using dirty derivative");
-		}
-		*/
+		ROS_ASSERT_MSG( spline_x_.interpolate(vias_x), "Spline X interpolation failed!!!" );
+		ROS_ASSERT_MSG( spline_y_.interpolate(vias_y), "Spline Y interpolation failed!!!" );
+		ROS_ASSERT_MSG( spline_z_.interpolate(vias_z), "Spline Z interpolation failed!!!" );
+		ROS_ASSERT_MSG( spline_r_.interpolate(vias_r), "Spline Yaw interpolation failed!!!" );
 
 		spline_pos_start_ = vector_from_msg(goal->positions.front());
 		spline_pos_end_ = vector_from_msg(goal->positions.back());
@@ -217,9 +158,11 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
+		if(!param_ref_velocity_)
+			ref.type_mask =	ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
 
 		ref.acceleration_or_force = vector_from_eig(acc);
-		if(!param_ref_accel_)
+		if(!param_ref_acceleration_)
 			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
 
 		success = true;
@@ -274,22 +217,27 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				double naz = 0.0;
 				double nar = 0.0;
 
-				get_spline_reference(spline_x_, spline_xd_, spline_xdd_, npx, nvx, nax, t_norm);
-				get_spline_reference(spline_y_, spline_yd_, spline_ydd_, npy, nvy, nay, t_norm);
-				get_spline_reference(spline_z_, spline_zd_, spline_zdd_, npz, nvz, naz, t_norm);
-				get_spline_reference(spline_r_, spline_rd_, spline_rdd_, npr, nvr, nar, t_norm);
+				get_spline_reference(spline_x_, npx, nvx, nax, t_norm);
+				get_spline_reference(spline_y_, npy, nvy, nay, t_norm);
+				get_spline_reference(spline_z_, npz, nvz, naz, t_norm);
+				get_spline_reference(spline_r_, npr, nvr, nar, t_norm);
 
 				pos = Eigen::Vector3d(npx,npy,npz);
-				vel = Eigen::Vector3d(nvx,nvy,nvz) / spline_duration_.toSec();
-
 				rpos = npr;
-				rrate = nvr / spline_duration_.toSec();
 
-				if(param_ref_accel_) {
+				if(param_ref_velocity_) {
+					vel = Eigen::Vector3d(nvx,nvy,nvz) / spline_duration_.toSec();
+					rrate = nvr / spline_duration_.toSec();
+				} else {
+					acc = Eigen::Vector3d::Zero();
+				}
+
+				if(param_ref_acceleration_) {
 					acc = Eigen::Vector3d(nax,nay,naz) / ( spline_duration_.toSec() * spline_duration_.toSec() );
 				} else {
 					acc = Eigen::Vector3d::Zero();
 				}
+
 				//nar is discarded
 
 				contrail::TrajectoryFeedback feedback;
@@ -363,48 +311,23 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_end_position_accuracy_ = config.end_position_accuracy;
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
-	param_ref_accel_ = config.output_accel_ref;
-
-	if(param_ref_accel_)
-		ROS_ERROR("Reference accel is not implemented!");
-
-	param_ref_accel_ = false;
+	param_ref_velocity_ = config.use_velocity_ref;
+	param_ref_acceleration_ = config.use_acceleration_ref;
 }
 
-void ContrailManager::get_spline_reference(tinyspline::BSpline& spline,
-											tinyspline::BSpline& splined,
-											tinyspline::BSpline& splinedd,
+void ContrailManager::get_spline_reference( contrail_spline_lib::InterpolatedQuinticSpline& spline,
 											double& pos,
 											double& vel,
 											double& acc,
 											const double u) {
 	// x values need to be scaled down in extraction as well.
 	ROS_ASSERT_MSG((u >= 0.0) && (u <= 1.0), "Invalid time point given for spline interpolation (0.0 <= t <= 1.0)");
+	ROS_ASSERT_MSG(spline.is_valid(), "Invalid spline request (not initialized?)");
 
-	std::vector<tinyspline::real> vp = spline(u).result();
-	pos = vp[0];
-
-	if(!use_dirty_derivative_) {
-		std::vector<tinyspline::real> vv = splined(u).result();
-		vel = vv[0];
-		//std::vector<tinyspline::real> va = splinedd(u).result();
-		//acc = va[0];
-		acc = 0.0;
-	} else {
-		//XXX: Manually derrive over a short period as proper derivative can't be calculated using this library
-		double dt = 0.02;
-		//Shorten time to ensure that 0.0<=u<=1.0 is preserved
-		double ul = u - dt;
-		double uh = u + dt;
-		ul = (ul >= 0.0) ? ul : 0.0;
-		uh = (uh <= 1.0) ? uh : 1.0;
-
-		std::vector<tinyspline::real> vdl = spline(ul).result();
-		std::vector<tinyspline::real> vdh = spline(uh).result();
-
-		vel = (vdh[0] - vdl[0]) / (2*dt);
-		acc = 0;
-	}
+	contrail_spline_lib::quintic_spline_point_t point = spline.lookup(u);
+	pos = point.q;
+	vel = point.qd;
+	acc = point.qdd;
 }
 
 void ContrailManager::publish_approx_spline( const ros::Time& stamp ) {
@@ -420,20 +343,20 @@ void ContrailManager::publish_approx_spline( const ros::Time& stamp ) {
 	for(int i=0; i<(num_points+1); i++) {
 		//Reticulate the data of the current time
 		double u = normalize(i,0,num_points);
-		std::vector<tinyspline::real> x = spline_x_(u).result();
-		std::vector<tinyspline::real> y = spline_y_(u).result();
-		std::vector<tinyspline::real> z = spline_z_(u).result();
-		std::vector<tinyspline::real> yaw = spline_r_(u).result();
+		contrail_spline_lib::quintic_spline_point_t x = spline_x_.lookup(u);
+		contrail_spline_lib::quintic_spline_point_t y = spline_y_.lookup(u);
+		contrail_spline_lib::quintic_spline_point_t z = spline_z_.lookup(u);
+		contrail_spline_lib::quintic_spline_point_t yaw = spline_r_.lookup(u);
 
 		geometry_msgs::PoseStamped p;
 		p.header.frame_id = msg_out.header.frame_id;
 		p.header.stamp = t;
 		p.header.seq = i;
 
-		p.pose.position.x = x[0];
-		p.pose.position.y = y[0];
-		p.pose.position.z = z[0];
-		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(yaw[0]));
+		p.pose.position.x = x.q;
+		p.pose.position.y = y.q;
+		p.pose.position.z = z.q;
+		p.pose.orientation = quaternion_from_eig(quaternion_from_yaw(yaw.q));
 
 		msg_out.poses.push_back(p);
 

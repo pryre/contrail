@@ -9,13 +9,11 @@
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
 
+#include <contrail/TrajectoryAction.h>
 #include <contrail/ManagerParamsConfig.h>
-
-//#include <tinyspline_ros/tinysplinecpp.h>
-#include <contrail_spline_lib/InterpolateQuinticSpline.h>
+#include <contrail_spline_lib/interpolated_quintic_spline.h>
 
 #include <actionlib/server/simple_action_server.h>
-#include <contrail/TrajectoryAction.h>
 
 #include <mavros_msgs/PositionTarget.h>
 
@@ -38,7 +36,8 @@ class ContrailManager {
 		int param_spline_approx_res_;
 		double param_end_position_accuracy_;
 		double param_end_yaw_accuracy_;
-		bool param_ref_accel_;
+		bool param_ref_velocity_;
+		bool param_ref_acceleration_;
 
 		ros::Time spline_start_;
 		ros::Duration spline_duration_;
@@ -48,21 +47,7 @@ class ContrailManager {
 		Eigen::Vector3d spline_pos_end_;
 		double spline_rot_start_;
 		double spline_rot_end_;
-		/*
-		tinyspline::BSpline spline_x_;
-		tinyspline::BSpline spline_xd_;
-		tinyspline::BSpline spline_xdd_;
-		tinyspline::BSpline spline_y_;
-		tinyspline::BSpline spline_yd_;
-		tinyspline::BSpline spline_ydd_;
-		tinyspline::BSpline spline_z_;
-		tinyspline::BSpline spline_zd_;
-		tinyspline::BSpline spline_zdd_;
-		tinyspline::BSpline spline_r_;
-		tinyspline::BSpline spline_rd_;
-		tinyspline::BSpline spline_rdd_;
-		bool use_dirty_derivative_;
-		*/
+
 		contrail_spline_lib::InterpolatedQuinticSpline spline_x_;
 		contrail_spline_lib::InterpolatedQuinticSpline spline_y_;
 		contrail_spline_lib::InterpolatedQuinticSpline spline_z_;
@@ -110,7 +95,7 @@ class ContrailManager {
 
 		void set_action_goal();
 
-		void get_spline_reference(tinyspline::BSpline& spline, tinyspline::BSpline& splined, tinyspline::BSpline& splinedd, double& pos, double& vel, double& acc, const double u);
+		void get_spline_reference(contrail_spline_lib::InterpolatedQuinticSpline& spline, double& pos, double& vel, double& acc, const double u);
 
 		inline double normalize(double x, const double min, const double max) const {
 			return (x - min) / (max - min);
