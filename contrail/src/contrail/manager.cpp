@@ -62,6 +62,10 @@ bool ContrailManager::has_reference( const ros::Time t ) {
 	return ( spline_start_ > ros::Time(0) );
 }
 
+bool ContrailManager::clear_reference( void ) {
+	spline_start_ = ros::Time(0);
+}
+
 void ContrailManager::callback_timer(const ros::TimerEvent& e) {
 	//Check for a new goal
 	if( as_.isNewGoalAvailable() ) {

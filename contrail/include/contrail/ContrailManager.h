@@ -67,6 +67,7 @@ class ContrailManager {
 		void set_frame_id( std::string frame_id );
 
 		bool has_reference( const ros::Time t );
+		bool clear_reference( void );
 
 		//Gets the current reference from the latest updated source
 		//Returns true if the reference was successfully obtained
