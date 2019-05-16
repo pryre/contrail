@@ -33,6 +33,8 @@ class InterpolatedQuinticSpline {
 		const Eigen::VectorXd& get_ddvias( void );
 
 		quintic_spline_point_t lookup( double u );
+
+		const inline bool is_valid( void ) { return _is_valid; };
 };
 
 }

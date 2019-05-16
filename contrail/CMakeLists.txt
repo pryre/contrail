@@ -13,9 +13,10 @@ find_package(catkin REQUIRED COMPONENTS
   mavros_msgs
   geometry_msgs
   contrail_msgs
+  contrail_spline_lib
   message_generation
   dynamic_reconfigure
-  tinyspline_ros
+#  tinyspline_ros
   actionlib
 )
 
@@ -112,7 +113,7 @@ generate_dynamic_reconfigure_options(
 catkin_package(
   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
   LIBRARIES ${PROJECT_NAME}_manager
-  CATKIN_DEPENDS contrail_msgs tinyspline_ros
+  CATKIN_DEPENDS contrail_msgs contrail_spline_lib #tinyspline_ros
   DEPENDS EIGEN3
 )
 

@@ -3,6 +3,8 @@
 
 #include <eigen3/Eigen/Dense>
 
+#include <stdio.h>
+
 using namespace contrail_spline_lib;
 
 template<class T>
@@ -38,7 +40,7 @@ bool InterpolatedQuinticSpline::interpolate( const Eigen::VectorXd& vias ) {
 		_is_valid = true;
 	}
 
-	return _is_valid;
+	return is_valid();
 }
 
 const Eigen::VectorXd& InterpolatedQuinticSpline::get_vias( void ) {
