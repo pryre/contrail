@@ -85,8 +85,8 @@ class Planner(Plugin):
 		self._widget.button_remove.clicked.connect(self.button_remove_pressed)
 
 		# Class Variales
-		#self.loaded_movement = Movement()
-		#self.num_interp = 10
+		self.loaded_movement = Movement()
+		self.num_interp = 10
 
 		# this is the Navigation widget
 		# it takes the Canvas widget and a parent
