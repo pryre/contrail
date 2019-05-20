@@ -36,6 +36,7 @@ class ContrailManager {
 		int param_spline_approx_res_;
 		double param_end_position_accuracy_;
 		double param_end_yaw_accuracy_;
+		bool param_ref_position_;
 		bool param_ref_velocity_;
 		bool param_ref_acceleration_;
 

@@ -32,6 +32,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 	param_spline_approx_res_(0),
 	param_end_position_accuracy_(0.0),
 	param_end_yaw_accuracy_(0.0),
+	param_ref_position_(false),
 	param_ref_velocity_(false),
 	param_ref_acceleration_(false),
 	spline_start_(0),
@@ -159,6 +160,8 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 
 		ref.position = point_from_eig(pos);
 		ref.yaw = rpos;
+		if(!param_ref_position_)
+			ref.type_mask =	ref.IGNORE_PX | ref.IGNORE_PY | ref.IGNORE_PZ | ref.IGNORE_YAW;
 
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
@@ -166,8 +169,15 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 			ref.type_mask =	ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
 
 		ref.acceleration_or_force = vector_from_eig(acc);
-		if(!param_ref_acceleration_)
+		if(!param_ref_acceleration_) {
 			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
+		} else if (!param_ref_position_ && !param_ref_velocity_) {
+			// Edge-case for accel-only reference,
+			// then we need to set yaw-rate to 0 at
+			// the very least
+			ref.yaw_rate = 0.0;
+			ref.type_mask &= ~ref.IGNORE_YAW_RATE;
+		}
 
 		success = true;
 	}
@@ -315,6 +325,7 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_end_position_accuracy_ = config.end_position_accuracy;
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
+	param_ref_position_ = config.use_position_ref;
 	param_ref_velocity_ = config.use_velocity_ref;
 	param_ref_acceleration_ = config.use_acceleration_ref;
 }
