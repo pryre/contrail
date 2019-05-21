@@ -157,21 +157,23 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 		ref.header.frame_id = param_frame_id_;
 
 		ref.coordinate_frame = ref.FRAME_LOCAL_NED;
+		ref.type_mask = 0;
 
 		ref.position = point_from_eig(pos);
 		ref.yaw = rpos;
-		if(!param_ref_position_)
-			ref.type_mask =	ref.IGNORE_PX | ref.IGNORE_PY | ref.IGNORE_PZ | ref.IGNORE_YAW;
-
+		if(!param_ref_position_) {
+			ref.type_mask |= ref.IGNORE_PX | ref.IGNORE_PY | ref.IGNORE_PZ | ref.IGNORE_YAW;
+		}
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
-		if(!param_ref_velocity_)
-			ref.type_mask =	ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
+		if(!param_ref_velocity_) {
+			ref.type_mask |= ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
+		}
 
 		ref.acceleration_or_force = vector_from_eig(acc);
 		if(!param_ref_acceleration_) {
-			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
-		} else if (!param_ref_position_ && !param_ref_velocity_) {
+			ref.type_mask |= ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
+		} else if (param_ref_acceleration_ && !param_ref_position_ && !param_ref_velocity_) {
 			// Edge-case for accel-only reference,
 			// then we need to set yaw-rate to 0 at
 			// the very least
