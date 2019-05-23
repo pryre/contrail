@@ -72,9 +72,9 @@ class Planner(Plugin):
 
 		# Flight Plan
 		self._widget.combobox_mode.currentIndexChanged.connect(self.mode_changed)
-		self._widget.input_duration.textChanged.connect(self.set_flight_plan_duration)
-		self._widget.input_nom_vel.textChanged.connect(self.set_flight_plan_nom_vel)
-		self._widget.input_nom_rate.textChanged.connect(self.set_flight_plan_nom_rate)
+		self._widget.input_duration.textEdited.connect(self.set_flight_plan_duration)
+		self._widget.input_nom_vel.textEdited.connect(self.set_flight_plan_nom_vel)
+		self._widget.input_nom_rate.textEdited.connect(self.set_flight_plan_nom_rate)
 
 		# Waypoint
 		self._widget.table_waypoints.currentItemChanged.connect(self.list_item_changed)
@@ -106,6 +106,7 @@ class Planner(Plugin):
 		self.plot_3d_ax.set_xlabel('Position (X)')
 		self.plot_3d_ax.set_ylabel('Position (Y)')
 		self.plot_3d_ax.set_zlabel('Position (Z)')
+		self.plot_3d_ax.set_aspect('equal', 'box')
 
 		self.plot_x_figure = Figure()
 		self.plot_x_figure.patch.set_facecolor('white')
@@ -368,6 +369,7 @@ class Planner(Plugin):
 				mid_x = (maxx+minx) / 2.0
 				mid_y = (maxy+miny) / 2.0
 				mid_z = (maxz+minz) / 2.0
+
 				if max_range:
 					self.plot_3d_ax.set_xlim(mid_x - max_range, mid_x + max_range)
 					self.plot_3d_ax.set_ylim(mid_y - max_range, mid_y + max_range)
