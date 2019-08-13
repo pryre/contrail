@@ -112,7 +112,7 @@ class Planner(Plugin):
 	def restore_settings(self, plugin_settings, instance_settings):
 		try:
 			self.num_interp = int( instance_settings.value("num_interp") )
-		except AttributeError:
+		except (AttributeError,TypeError) as e:
 			self.num_interp = 10
 
 	#def trigger_configuration(self):
