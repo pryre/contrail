@@ -7,16 +7,51 @@ import roslib
 roslib.load_manifest('contrail')
 import rospy
 import actionlib
+from actionlib_msgs.msg import GoalStatus
 
+import math
 import contrail.waypoint_helper as wph
 from contrail.msg import TrajectoryAction, TrajectoryGoal
+from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Quaternion
+from nav_msgs.msg import Path
 
 global timer
+global pub_discrete_path
 global client_base
 
-def dispatch_discrete(wps,nom_lvel,nom_rvel):
-	for i in range(len(wps) - 1):
+def quarternion_from_yaw(yaw):
+	y2 = yaw*0.5
+	q = Quaternion()
+	q.w = math.cos(y2)
+	q.x = 0.0
+	q.y = 0.0
+	q.z = math.sin(y2)
+	return q
 
+def send_discrete_path(wps):
+	global pub_discrete_path
+
+	path = Path()
+	path.header.frame_id = "map"
+	path.header.stamp = rospy.Time.now()
+
+	for i in range(len(wps)):
+		ps = PoseStamped()
+		ps.header.frame_id = path.header.frame_id
+		ps.header.stamp = path.header.stamp
+		ps.pose.position = wps[i].position
+		ps.pose.orientation = quarternion_from_yaw(wps[i].yaw)
+
+		path.poses.append(ps)
+
+	pub_discrete_path.publish(path)
+
+def dispatch_discrete(wps,nom_lvel,nom_rvel):
+	finished = True
+
+	for i in range(len(wps) - 1):
+		rospy.loginfo("Dispatching segment: %i" % (i+1))
 		dx = wps[i+1].position.x - wps[i].position.x
 		dy = wps[i+1].position.y - wps[i].position.y
 		dz = wps[i+1].position.z - wps[i].position.z
@@ -24,20 +59,29 @@ def dispatch_discrete(wps,nom_lvel,nom_rvel):
 		lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
 		rt = (wps[i+1].yaw - wps[i].yaw ) / nom_rvel
 
-		dispatch_continuous([wps[i], wps[i+1]], max([lt,rt]))
+		finished = dispatch_continuous([wps[i], wps[i+1]], max([lt,rt]))
+
+		if not finished:
+			rospy.logwarn("Cancelling remaining segments")
+			break
+
+	return finished
 
 def dispatch_continuous(wps,duration):
-		goal_base = TrajectoryGoal()
+	goal_base = TrajectoryGoal()
 
-		goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
-		goal_base.duration = rospy.Duration.from_sec(duration)
+	goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
+	goal_base.duration = rospy.Duration.from_sec(duration)
 
-		for i in range(len(wps)):
-			goal_base.positions.append(wps[i].position)
-			goal_base.yaws.append(wps[i].yaw)
+	for i in range(len(wps)):
+		goal_base.positions.append(wps[i].position)
+		goal_base.yaws.append(wps[i].yaw)
 
-		client_base.send_goal(goal_base)
-		client_base.wait_for_result()
+	client_base.send_goal(goal_base)
+	client_base.wait_for_result()
+
+	return (client_base.get_state() == GoalStatus.SUCCEEDED)
+
 
 def timer_callback(e):
 	global timer
@@ -50,21 +94,29 @@ def timer_callback(e):
 			tracking_mode = str(rospy.get_param("~waypoints/mode"))
 
 			rospy.loginfo("Loaded %i waypoints for %s tracking" % (len(wps),tracking_mode))
+			success = False
 
 			if tracking_mode == "discrete":
 				nom_lvel = rospy.get_param("~waypoints/nominal_velocity")
 				nom_rvel = rospy.get_param("~waypoints/nominal_yawrate")
 
-				dispatch_discrete(wps,nom_lvel,nom_rvel)
+				send_discrete_path(wps) # Send out display for nice tracking
+
+				success = dispatch_discrete(wps,nom_lvel,nom_rvel)
 			elif tracking_mode == "continuous":
 				duration = rospy.get_param("~waypoints/duration")
 
-				dispatch_continuous(wps,duration)
+				send_discrete_path(wps) # Clear display, not needed for continuous
+
+				success = dispatch_continuous(wps,duration)
 			else:
 				rospy.logerr("Unknown tracking mode (%s)" % tracking_mode)
 				rospy.signal_shutdown("Error: bad mode")
 
-			rospy.signal_shutdown("Waypoint plan complete!")
+			if success:
+				rospy.loginfo("Waypoint plan complete!")
+
+			rospy.signal_shutdown("Waypoint plan over")
 		else:
 			if (len(wps) < 2):
 				rospy.logerr("Not enough waypoints were been loaded (%i)" % len(wps))
@@ -75,8 +127,11 @@ def timer_callback(e):
 
 def waypoint_pub():
 	global timer
+	global pub_discrete_path
 	global client_base
 	rospy.init_node('load_waypoints', anonymous=True)
+
+	pub_discrete_path = rospy.Publisher("~discrete_path", Path, queue_size=1, latch=True)
 
 	action_topic = rospy.get_param("~action_topic", 'contrail')
 	client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)
