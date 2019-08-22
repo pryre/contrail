@@ -9,7 +9,6 @@ import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
 
-import math
 import contrail.waypoint_helper as wph
 from contrail.msg import TrajectoryAction, TrajectoryGoal
 from geometry_msgs.msg import PoseStamped
@@ -23,10 +22,10 @@ global client_base
 def quarternion_from_yaw(yaw):
 	y2 = yaw*0.5
 	q = Quaternion()
-	q.w = math.cos(y2)
+	q.w = cos(y2)
 	q.x = 0.0
 	q.y = 0.0
-	q.z = math.sin(y2)
+	q.z = sin(y2)
 	return q
 
 def send_discrete_path(wps):
@@ -81,7 +80,6 @@ def dispatch_continuous(wps,duration):
 	client_base.wait_for_result()
 
 	return (client_base.get_state() == GoalStatus.SUCCEEDED)
-
 
 def timer_callback(e):
 	global timer
