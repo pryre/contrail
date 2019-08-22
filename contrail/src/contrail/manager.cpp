@@ -32,6 +32,7 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 	param_spline_approx_res_(0),
 	param_end_position_accuracy_(0.0),
 	param_end_yaw_accuracy_(0.0),
+	param_ref_position_(false),
 	param_ref_velocity_(false),
 	param_ref_acceleration_(false),
 	spline_start_(0),
@@ -43,8 +44,8 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 
 	dyncfg_settings_.setCallback(boost::bind(&ContrailManager::callback_cfg_settings, this, _1, _2));
 
-	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_approximation", 10 );
-	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_points", 10 );
+	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_approximation", 10, true );
+	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_points", 10, true );
 
 	timer_ = nhp_.createTimer(ros::Duration(1.0/50.0), &ContrailManager::callback_timer, this );
 	as_.start();
@@ -96,18 +97,22 @@ void ContrailManager::set_action_goal( void ) {
 		spline_start_ = ( goal->start == ros::Time(0) ) ? tc : goal->start;
 		spline_duration_ = goal->duration;
 
-		std::vector<double>positions_yaw = goal->yaws;
-		make_yaw_continuous(positions_yaw);
+		std::vector<double> positions_yaw = make_yaw_continuous( goal->yaws );
 
 		Eigen::VectorXd vias_x = Eigen::VectorXd::Zero(goal->positions.size());
 		Eigen::VectorXd vias_y = Eigen::VectorXd::Zero(goal->positions.size());
 		Eigen::VectorXd vias_z = Eigen::VectorXd::Zero(goal->positions.size());
-		Eigen::VectorXd vias_r = Eigen::VectorXd::Zero(goal->positions.size());
+		Eigen::VectorXd vias_r = Eigen::VectorXd::Zero(positions_yaw.size());
+
+		ROS_INFO( "Contrail: Creating trajectory [p:%u; y:%u]", (unsigned int)goal->positions.size(), (unsigned int)goal->yaws.size() );
 
 		for(int i=0; i<goal->positions.size(); i++) {
 			vias_x(i) = goal->positions[i].x;
 			vias_y(i) = goal->positions[i].y;
 			vias_z(i) = goal->positions[i].z;
+		}
+
+		for(int i=0; i<positions_yaw.size(); i++) {
 			vias_r(i) = positions_yaw[i];
 		}
 
@@ -124,8 +129,8 @@ void ContrailManager::set_action_goal( void ) {
 		publish_approx_spline(tc);
 		publish_spline_points(tc, goal->positions, goal->yaws);
 
-		ROS_INFO( "Contrail: creating position spline connecting %i points", (int)goal->positions.size() );
-		ROS_INFO( "Contrail: creating rotation spline connecting %i points", (int)goal->yaws.size() );
+		ROS_DEBUG( "Contrail: creating position spline connecting %i points", (int)goal->positions.size() );
+		ROS_DEBUG( "Contrail: creating rotation spline connecting %i points", (int)goal->yaws.size() );
 	} else {
 		spline_in_progress_ = false;
 		as_.setAborted();
@@ -151,28 +156,37 @@ bool ContrailManager::get_reference( mavros_msgs::PositionTarget &ref,
 	double rpos;
 	double rrate;
 
-	if(	get_reference( pos, vel, acc, rpos, rrate, tc ) ) {
+	if(	get_reference( pos, vel, acc, rpos, rrate, tc, g_c ) ) {
 		ref.header.stamp = tc;
 		ref.header.frame_id = param_frame_id_;
 
 		ref.coordinate_frame = ref.FRAME_LOCAL_NED;
+		ref.type_mask = 0;
 
 		ref.position = point_from_eig(pos);
 		ref.yaw = rpos;
-
+		if(!param_ref_position_) {
+			ref.type_mask |= ref.IGNORE_PX | ref.IGNORE_PY | ref.IGNORE_PZ | ref.IGNORE_YAW;
+		}
 		ref.velocity = vector_from_eig(vel);
 		ref.yaw_rate = rrate;
-		if(!param_ref_velocity_)
-			ref.type_mask =	ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
+		if(!param_ref_velocity_) {
+			ref.type_mask |= ref.IGNORE_VX | ref.IGNORE_VY | ref.IGNORE_VZ | ref.IGNORE_YAW_RATE;
+		}
 
 		ref.acceleration_or_force = vector_from_eig(acc);
-		if(!param_ref_acceleration_)
-			ref.type_mask =	ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
+		if(!param_ref_acceleration_) {
+			ref.type_mask |= ref.IGNORE_AFX | ref.IGNORE_AFY | ref.IGNORE_AFZ;
+		} else if (param_ref_acceleration_ && !param_ref_position_ && !param_ref_velocity_) {
+			// Edge-case for accel-only reference,
+			// then we need to set yaw-rate to 0 at
+			// the very least
+			ref.yaw_rate = 0.0;
+			ref.type_mask &= ~ref.IGNORE_YAW_RATE;
+		}
 
 		success = true;
 	}
-
-	check_end_reached(g_c);
 
 	return success;
 }
@@ -182,7 +196,8 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 									 Eigen::Vector3d &acc,
 									 double &rpos,
 									 double &rrate,
-									 const ros::Time tc ) {
+									 const ros::Time tc,
+									 const Eigen::Affine3d &g_c ) {
 	bool success = false;
 
 	//If a valid input has been received
@@ -263,7 +278,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				acc = Eigen::Vector3d::Zero();
 				rrate = 0.0;
 
-				ROS_INFO( "Contrail: spline finished" );
+				ROS_DEBUG( "Contrail: spline finished" );
 			}
 
 			output_pos_last_ = pos;
@@ -278,6 +293,8 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 
 		success = true;
 	}
+
+	check_end_reached(g_c);
 
 	return success;
 }
@@ -302,7 +319,7 @@ void ContrailManager::check_end_reached( const Eigen::Affine3d &g_c ) {
 			as_.setSucceeded(result);
 
 			wait_reached_end_ = false;
-			ROS_INFO( "Contrail: action finished" );
+			ROS_INFO( "Contrail: Trajectory complete" );
 		}
 	}
 }
@@ -315,6 +332,7 @@ void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &conf
 	param_end_position_accuracy_ = config.end_position_accuracy;
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;
+	param_ref_position_ = config.use_position_ref;
 	param_ref_velocity_ = config.use_velocity_ref;
 	param_ref_acceleration_ = config.use_acceleration_ref;
 }
@@ -332,6 +350,36 @@ void ContrailManager::get_spline_reference( contrail_spline_lib::InterpolatedQui
 	pos = point.q;
 	vel = point.qd;
 	acc = point.qdd;
+}
+
+double ContrailManager::yaw_error_shortest_path(const double y_sp, const double y) {
+	double ye = y_sp - y;
+
+	while(fabs(ye) > M_PI)
+		ye += (ye > 0.0) ? -2*M_PI : 2*M_PI;
+
+	return ye;
+}
+
+std::vector<double> ContrailManager::make_yaw_continuous( const std::vector<double>& yaw ) {
+	std::vector<double> cont_yaw;
+	cont_yaw.reserve( yaw.size() );
+
+	for(unsigned int i=0; i<yaw.size(); i++) {
+		cont_yaw.push_back(yaw[i]);
+
+		if ( i >= 1) {
+			while(fabs(cont_yaw[i] - cont_yaw[i-1]) > M_PI) {
+				if(cont_yaw[i] > cont_yaw[i-1]) {
+					cont_yaw[i] -= 2*M_PI;
+				} else {
+					cont_yaw[i] += 2*M_PI;
+				}
+			}
+		}
+	}
+
+	return cont_yaw;
 }
 
 void ContrailManager::publish_approx_spline( const ros::Time& stamp ) {
@@ -398,18 +446,20 @@ void ContrailManager::publish_spline_points( const ros::Time& stamp,
 }
 
 bool ContrailManager::check_endpoint_reached( const Eigen::Vector3d& pos_s, const double yaw_s, const Eigen::Vector3d& pos_c, const double yaw_c ) {
-	return ( (radial_dist(pos_s, pos_c) < param_end_position_accuracy_) && (rotation_dist(yaw_s, yaw_c) < param_end_yaw_accuracy_) );
+	return ( (radial_dist(pos_s, pos_c) < param_end_position_accuracy_) && (yaw_error_shortest_path(yaw_s, yaw_c) < param_end_yaw_accuracy_) );
 }
 
 double ContrailManager::radial_dist( const Eigen::Vector3d& a, const Eigen::Vector3d& b ) {
 	return (a - b).norm();
 }
 
+/*
 double ContrailManager::rotation_dist( const double a, const double b ) {
 	double rad = std::fabs(a - b);
 	//Adjust for +- short rotation
 	return (rad > M_PI) ? rad - M_PI : rad;
 }
+*/
 
 double ContrailManager::yaw_from_quaternion( const Eigen::Quaterniond &q ) {
 	double siny = +2.0 * (q.w() * q.z() + q.x() * q.y());

@@ -27,15 +27,100 @@
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
-    <layout class="QHBoxLayout" name="layout_window" stretch="1,0">
+    <layout class="QHBoxLayout" name="layout_window" stretch="0,0">
      <item>
-      <widget class="QWidget" name="widget_plot" native="true">
-       <property name="sizePolicy">
-        <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
-         <horstretch>0</horstretch>
-         <verstretch>0</verstretch>
-        </sizepolicy>
+      <widget class="QTabWidget" name="tabgroup_plots">
+       <property name="tabPosition">
+        <enum>QTabWidget::South</enum>
        </property>
+       <property name="currentIndex">
+        <number>0</number>
+       </property>
+       <widget class="QWidget" name="tab_plots_3d">
+        <attribute name="title">
+         <string>3D Projection</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout">
+         <item row="0" column="0">
+          <widget class="QWidget" name="widget_plot_3d" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_plots_x">
+        <attribute name="title">
+         <string>X Axis</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <item row="0" column="0">
+          <widget class="QWidget" name="widget_plot_x" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_plots_y">
+        <attribute name="title">
+         <string>Y Axis</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_4">
+         <item row="0" column="0">
+          <widget class="QWidget" name="widget_plot_y" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_plots_z">
+        <attribute name="title">
+         <string>Z Axis</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_5">
+         <item row="0" column="0">
+          <widget class="QWidget" name="widget_plot_z" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="tab_plots_psi">
+        <attribute name="title">
+         <string>Ψ Axis</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_6">
+         <item row="0" column="0">
+          <widget class="QWidget" name="widget_plot_psi" native="true">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Expanding" vsizetype="Expanding">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
       </widget>
      </item>
      <item>
@@ -80,7 +165,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
+           <set>AlignCenter</set>
           </property>
          </column>
          <column>
@@ -94,7 +179,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
+           <set>AlignCenter</set>
           </property>
          </column>
          <column>
@@ -108,7 +193,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
+           <set>AlignCenter</set>
           </property>
          </column>
          <column>
@@ -122,7 +207,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
+           <set>AlignCenter</set>
           </property>
          </column>
         </widget>
@@ -140,6 +225,9 @@
            <width>0</width>
            <height>0</height>
           </size>
+         </property>
+         <property name="tabPosition">
+          <enum>QTabWidget::South</enum>
          </property>
          <property name="currentIndex">
           <number>0</number>
