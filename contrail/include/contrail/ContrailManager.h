@@ -72,6 +72,7 @@ class ContrailManager {
 
 		//Gets the current reference from the latest updated source
 		//Returns true if the reference was successfully obtained
+		//Also performs checks on whether end has reached succsesfully
 		bool get_reference( mavros_msgs::PositionTarget &ref,
 							const ros::Time tc,
 							const geometry_msgs::Pose &pose );
@@ -85,7 +86,8 @@ class ContrailManager {
 							Eigen::Vector3d &acc,
 							double &rpos,
 							double &rrate,
-							const ros::Time tc );
+							const ros::Time tc,
+							const Eigen::Affine3d &g_c );
 
 		void check_end_reached( const geometry_msgs::Pose &p_c );
 		void check_end_reached( const Eigen::Affine3d &g_c );
@@ -103,17 +105,7 @@ class ContrailManager {
 			return (x - min) / (max - min);
 		}
 
-		inline void make_yaw_continuous( std::vector<double>& yaw ) {
-			for(int i=1; i<yaw.size(); i++) {
-				while(fabs(yaw[i] - yaw[i-1]) > M_PI) {
-					if(yaw[i] > yaw[i-1]) {
-						yaw[i] -= 2*M_PI;
-					} else {
-						yaw[i] += 2*M_PI;
-					}
-				}
-			}
-		}
+		std::vector<double> make_yaw_continuous( const std::vector<double>& yaw );
 
 		void publish_approx_spline( const ros::Time& stamp );
 		void publish_spline_points( const ros::Time& stamp, const std::vector<geometry_msgs::Vector3>& pos, const std::vector<double>& yaw );
@@ -126,7 +118,8 @@ class ContrailManager {
 
 		//Calculates the radial distance between two points
 		double radial_dist( const Eigen::Vector3d& a, const Eigen::Vector3d& b );
-		double rotation_dist( const double a, const double b );
+		double yaw_error_shortest_path(const double y_sp, const double y);
+		//double rotation_dist( const double a, const double b );
 
 		double yaw_from_quaternion( const Eigen::Quaterniond &q );
 		Eigen::Quaterniond quaternion_from_yaw( const double yaw );
