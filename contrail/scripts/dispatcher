@@ -79,8 +79,18 @@ def dispatch_continuous(wps,duration):
 
 	client_base.send_goal(goal_base)
 	client_base.wait_for_result()
+	result_state = client_base.get_state()
 
-	return (client_base.get_state() == GoalStatus.SUCCEEDED)
+	success = (result_state == GoalStatus.SUCCEEDED)
+	if not success:
+		if  (result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
+			rospy.logwarn("The current mission was cancelled/aborted")
+		elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
+			rospy.logerr("Error: The current mission was recalled/rejected")
+		else:
+			rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
+
+	return success
 
 
 def timer_callback(e):
@@ -106,7 +116,7 @@ def timer_callback(e):
 			elif tracking_mode == "continuous":
 				duration = rospy.get_param("~waypoints/duration")
 
-				send_discrete_path(wps) # Clear display, not needed for continuous
+				send_discrete_path([]) # Clear display, not needed for continuous
 
 				success = dispatch_continuous(wps,duration)
 			else:
