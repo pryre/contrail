@@ -2,6 +2,7 @@
 
 #include <contrail/ContrailManager.h>
 
+#include <std_msgs/Bool.h>
 #include <nav_msgs/Path.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <geometry_msgs/Pose.h>
@@ -26,8 +27,8 @@
 // Public
 //=======================
 
-ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
-	nhp_(nhp),
+ContrailManager::ContrailManager( const ros::NodeHandle &nh, std::string frame_id, const bool is_ready ) :
+	nhp_( nh, "contrail" ),
 	param_frame_id_(frame_id),
 	param_spline_approx_res_(0),
 	param_end_position_accuracy_(0.0),
@@ -35,17 +36,22 @@ ContrailManager::ContrailManager( ros::NodeHandle nhp, std::string frame_id ) :
 	param_ref_position_(false),
 	param_ref_velocity_(false),
 	param_ref_acceleration_(false),
+	is_ready_(is_ready),
 	spline_start_(0),
 	spline_duration_(0),
 	spline_in_progress_(false),
 	wait_reached_end_(false),
-	as_(nhp, "contrail", false),
-	dyncfg_settings_(ros::NodeHandle(nhp, "contrail")) {
+	as_(nh, "contrail", false),
+	dyncfg_settings_( nhp_ ) {
 
 	dyncfg_settings_.setCallback(boost::bind(&ContrailManager::callback_cfg_settings, this, _1, _2));
 
-	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_approximation", 10, true );
-	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "contrail/spline_points", 10, true );
+	pub_spline_approx_ = nhp_.advertise<nav_msgs::Path>( "spline_approximation", 10, true );
+	pub_spline_points_ = nhp_.advertise<nav_msgs::Path>( "spline_points", 10, true );
+	pub_is_ready_ = nhp_.advertise<std_msgs::Bool>( "is_ready", 1, true );
+
+	//Send out our first "is_ready" message
+	allow_new_goals(is_ready_);
 
 	timer_ = nhp_.createTimer(ros::Duration(1.0/50.0), &ContrailManager::callback_timer, this );
 	as_.start();
@@ -65,6 +71,22 @@ bool ContrailManager::has_reference( const ros::Time t ) {
 
 bool ContrailManager::clear_reference( void ) {
 	spline_start_ = ros::Time(0);
+	spline_in_progress_ = false;
+
+	if( as_.isActive() )
+		as_.setAborted();
+}
+
+void ContrailManager::allow_new_goals( const bool ready ) {
+	is_ready_ = ready;
+
+	std_msgs::Bool msg_out;
+	msg_out.data = is_ready_;
+	pub_is_ready_.publish(msg_out);
+}
+
+bool ContrailManager::is_allowing_new_goals( void ) {
+	return is_ready_;
 }
 
 void ContrailManager::callback_timer(const ros::TimerEvent& e) {
@@ -85,57 +107,62 @@ void ContrailManager::callback_timer(const ros::TimerEvent& e) {
 void ContrailManager::set_action_goal( void ) {
 	boost::shared_ptr<const contrail::TrajectoryGoal> goal = as_.acceptNewGoal();
 
-	if( (goal->duration > ros::Duration(0) ) &&
-		(goal->positions.size() >= 2) &&
-		(goal->yaws.size() >= 2) ) {
+	if(is_ready_) {
+		if( (goal->duration > ros::Duration(0) ) &&
+			(goal->positions.size() >= 2) &&
+			(goal->yaws.size() >= 2) ) {
 
-		ros::Time tc = ros::Time::now();
+			ros::Time tc = ros::Time::now();
 
-		spline_in_progress_ = true;
-		wait_reached_end_ = false;
+			spline_in_progress_ = true;
+			wait_reached_end_ = false;
 
-		spline_start_ = ( goal->start == ros::Time(0) ) ? tc : goal->start;
-		spline_duration_ = goal->duration;
+			spline_start_ = ( goal->start == ros::Time(0) ) ? tc : goal->start;
+			spline_duration_ = goal->duration;
 
-		std::vector<double> positions_yaw = make_yaw_continuous( goal->yaws );
+			std::vector<double> positions_yaw = make_yaw_continuous( goal->yaws );
 
-		Eigen::VectorXd vias_x = Eigen::VectorXd::Zero(goal->positions.size());
-		Eigen::VectorXd vias_y = Eigen::VectorXd::Zero(goal->positions.size());
-		Eigen::VectorXd vias_z = Eigen::VectorXd::Zero(goal->positions.size());
-		Eigen::VectorXd vias_r = Eigen::VectorXd::Zero(positions_yaw.size());
+			Eigen::VectorXd vias_x = Eigen::VectorXd::Zero(goal->positions.size());
+			Eigen::VectorXd vias_y = Eigen::VectorXd::Zero(goal->positions.size());
+			Eigen::VectorXd vias_z = Eigen::VectorXd::Zero(goal->positions.size());
+			Eigen::VectorXd vias_r = Eigen::VectorXd::Zero(positions_yaw.size());
 
-		ROS_INFO( "Contrail: Creating trajectory [p:%u; y:%u]", (unsigned int)goal->positions.size(), (unsigned int)goal->yaws.size() );
+			ROS_INFO( "Contrail: Creating trajectory [p:%u; y:%u]", (unsigned int)goal->positions.size(), (unsigned int)goal->yaws.size() );
 
-		for(int i=0; i<goal->positions.size(); i++) {
-			vias_x(i) = goal->positions[i].x;
-			vias_y(i) = goal->positions[i].y;
-			vias_z(i) = goal->positions[i].z;
+			for(int i=0; i<goal->positions.size(); i++) {
+				vias_x(i) = goal->positions[i].x;
+				vias_y(i) = goal->positions[i].y;
+				vias_z(i) = goal->positions[i].z;
+			}
+
+			for(int i=0; i<positions_yaw.size(); i++) {
+				vias_r(i) = positions_yaw[i];
+			}
+
+			ROS_ASSERT_MSG( spline_x_.interpolate(vias_x), "Spline X interpolation failed!!!" );
+			ROS_ASSERT_MSG( spline_y_.interpolate(vias_y), "Spline Y interpolation failed!!!" );
+			ROS_ASSERT_MSG( spline_z_.interpolate(vias_z), "Spline Z interpolation failed!!!" );
+			ROS_ASSERT_MSG( spline_r_.interpolate(vias_r), "Spline Yaw interpolation failed!!!" );
+
+			spline_pos_start_ = vector_from_msg(goal->positions.front());
+			spline_pos_end_ = vector_from_msg(goal->positions.back());
+			spline_rot_start_ = goal->yaws.front();
+			spline_rot_end_ = goal->yaws.back();
+
+			publish_approx_spline(tc);
+			publish_spline_points(tc, goal->positions, goal->yaws);
+
+			ROS_DEBUG( "Contrail: creating position spline connecting %i points", (int)goal->positions.size() );
+			ROS_DEBUG( "Contrail: creating rotation spline connecting %i points", (int)goal->yaws.size() );
+		} else {
+			clear_reference();
+
+			ROS_ERROR( "Contrail: at least 2 positions/yaws must be specified (%i/%i), and duration must be >0 (%0.4f)", (int)goal->positions.size(), (int)goal->yaws.size(), goal->duration.toSec() );
 		}
-
-		for(int i=0; i<positions_yaw.size(); i++) {
-			vias_r(i) = positions_yaw[i];
-		}
-
-		ROS_ASSERT_MSG( spline_x_.interpolate(vias_x), "Spline X interpolation failed!!!" );
-		ROS_ASSERT_MSG( spline_y_.interpolate(vias_y), "Spline Y interpolation failed!!!" );
-		ROS_ASSERT_MSG( spline_z_.interpolate(vias_z), "Spline Z interpolation failed!!!" );
-		ROS_ASSERT_MSG( spline_r_.interpolate(vias_r), "Spline Yaw interpolation failed!!!" );
-
-		spline_pos_start_ = vector_from_msg(goal->positions.front());
-		spline_pos_end_ = vector_from_msg(goal->positions.back());
-		spline_rot_start_ = goal->yaws.front();
-		spline_rot_end_ = goal->yaws.back();
-
-		publish_approx_spline(tc);
-		publish_spline_points(tc, goal->positions, goal->yaws);
-
-		ROS_DEBUG( "Contrail: creating position spline connecting %i points", (int)goal->positions.size() );
-		ROS_DEBUG( "Contrail: creating rotation spline connecting %i points", (int)goal->yaws.size() );
 	} else {
-		spline_in_progress_ = false;
-		as_.setAborted();
+		clear_reference();
 
-		ROS_ERROR( "Contrail: at least 2 positions/yaws must be specified (%i/%i), and duration must be >0 (%0.4f)", (int)goal->positions.size(), (int)goal->yaws.size(), goal->duration.toSec() );
+		ROS_ERROR( "Contrail: not ready to accept goals (wait for controller to signal ready)" );
 	}
 }
 

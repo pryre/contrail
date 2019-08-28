@@ -25,8 +25,9 @@
 
 class ContrailManager {
 	private:
-		ros::NodeHandle& nhp_;
+		ros::NodeHandle nhp_;
 
+		ros::Publisher pub_is_ready_;		//Publishes feedback from the parent node to show when we will accept inputs
 		ros::Publisher pub_spline_approx_;	//Publishes a approximate visualization of the calculated spline as feedback
 		ros::Publisher pub_spline_points_;	//Publishes a path representing the interpolated spline points
 
@@ -43,6 +44,7 @@ class ContrailManager {
 		ros::Time spline_start_;
 		ros::Duration spline_duration_;
 		bool spline_in_progress_;
+		bool is_ready_;
 		bool wait_reached_end_;
 		Eigen::Vector3d spline_pos_start_;
 		Eigen::Vector3d spline_pos_end_;
@@ -61,7 +63,7 @@ class ContrailManager {
 		actionlib::SimpleActionServer<contrail::TrajectoryAction> as_;
 
 	public:
-		ContrailManager( ros::NodeHandle nh, std::string frame_id = "map" );
+		ContrailManager( const ros::NodeHandle &nh, std::string frame_id = "map", const bool is_ready = false );
 
 		~ContrailManager( void );
 
@@ -69,6 +71,12 @@ class ContrailManager {
 
 		bool has_reference( const ros::Time t );
 		bool clear_reference( void );
+
+		//Parent node/library should must indicate to contrail that it is ready to go
+		//before contrail will accept new goals. Setting to false will cause contrail
+		//to reject new goals (won't affect current goal, parent must use clear_reference())
+		void allow_new_goals( const bool is_active );
+		bool is_allowing_new_goals( void );
 
 		//Gets the current reference from the latest updated source
 		//Returns true if the reference was successfully obtained

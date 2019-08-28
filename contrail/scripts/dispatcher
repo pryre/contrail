@@ -14,10 +14,12 @@ from contrail.msg import TrajectoryAction, TrajectoryGoal
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Quaternion
 from nav_msgs.msg import Path
+from std_msgs.msg import Bool
 
 global timer
 global pub_discrete_path
 global client_base
+global is_ready
 
 def quarternion_from_yaw(yaw):
 	y2 = yaw*0.5
@@ -78,13 +80,35 @@ def dispatch_continuous(wps,duration):
 
 	client_base.send_goal(goal_base)
 	client_base.wait_for_result()
+	result_state = client_base.get_state()
 
-	return (client_base.get_state() == GoalStatus.SUCCEEDED)
+	success = (result_state == GoalStatus.SUCCEEDED)
+	if not success:
+		if(result_state == GoalStatus.PENDING) or (result_state == GoalStatus.ACTIVE):
+			pass
+			#TODO: Get preemtion working correctly
+			#rospy.loginfo("The cancelling current mission")
+			#client_base.cancel_goal()
+		elif(result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
+			rospy.logwarn("The current mission was cancelled/aborted")
+		elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
+			rospy.logerr("Error: The current mission was recalled/rejected")
+		else:
+			rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
+
+	return success
+
+
+def is_ready_callback(msg_in):
+	global is_ready
+	is_ready = msg_in.data
 
 def timer_callback(e):
 	global timer
 
-	if e.current_real > rospy.Time(0):
+	if (e.current_real > rospy.Time(0)) and is_ready:
+		rospy.loginfo("Loading waypionts from parameters...")
+
 		timer.shutdown()
 		success, wps = wph.load_waypoints()
 
@@ -104,7 +128,7 @@ def timer_callback(e):
 			elif tracking_mode == "continuous":
 				duration = rospy.get_param("~waypoints/duration")
 
-				send_discrete_path(wps) # Clear display, not needed for continuous
+				send_discrete_path([]) # Clear display, not needed for continuous
 
 				success = dispatch_continuous(wps,duration)
 			else:
@@ -127,15 +151,20 @@ def waypoint_pub():
 	global timer
 	global pub_discrete_path
 	global client_base
+	global is_ready
+
+	is_ready = False
 	rospy.init_node('load_waypoints', anonymous=True)
 
 	pub_discrete_path = rospy.Publisher("~discrete_path", Path, queue_size=1, latch=True)
 
+	rospy.loginfo("Waiting for contrail to come online and ready")
+
 	action_topic = rospy.get_param("~action_topic", 'contrail')
 	client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)
 	client_base.wait_for_server()
+	ready_sub = rospy.Subscriber(action_topic + "/is_ready", Bool, is_ready_callback)
 
-	rospy.loginfo("Loading waypionts from parameters...")
 	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
 
 	rospy.spin()
