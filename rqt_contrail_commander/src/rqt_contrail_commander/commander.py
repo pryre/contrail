@@ -7,6 +7,7 @@ from qt_gui.plugin import Plugin
 from python_qt_binding import loadUi
 from python_qt_binding.QtWidgets import QWidget
 
+from std_msgs.msg import Bool
 from geometry_msgs.msg import Pose, Vector3, Quaternion, PoseStamped
 
 import actionlib
@@ -56,13 +57,18 @@ class Commander(Plugin):
 		self._widget.button_send_command.clicked.connect(self.button_send_command_pressed)
 
 		self.has_pose = False
+		self.isready = False
 		self.current_pose = None
 		self.sub_pose = None
+		self.sub_isready = None
 		self.client_base = None
 
 	def shutdown_plugin(self):
 		if self.sub_pose is not None:
 			self.sub_pose.unregister()
+
+		if self.sub_isready is not None:
+			self.sub_isready.unregister()
 
 	def save_settings(self, plugin_settings, instance_settings):
 		instance_settings.set_value('pose_prefix', self._widget.textbox_pose.text())
@@ -130,13 +136,22 @@ class Commander(Plugin):
 			rospy.logwarn("Unable to subscribe to action: %s" % self._widget.textbox_contrail.text())
 			self.client_base = None
 
+		if self.sub_isready is not None:
+			self.sub_isready.unregister()
+
+		try:
+			self.sub_isready = rospy.Subscriber(self._widget.textbox_contrail.text() + '/is_ready', Bool, self.callback_isready)
+		except:
+			rospy.logwarn("Unable to determin if contrail is ready on: %s" % self._widget.textbox_contrail.text())
+			self.sub_isready = None
+
 	def button_send_command_pressed(self):
 		rospy.logdebug("Send command pressed!")
 
 		if self.client_base is not None:
 			if self.client_base.wait_for_server(rospy.Duration(0.5)):
 				try:
-					if self.has_pose:
+					if self.has_pose and self.isready:
 						dur = rospy.Duration(float(self._widget.textbox_goto_duration.text()))
 
 						pos_x = float(self._widget.textbox_goto_pos_x.text())
@@ -158,7 +173,12 @@ class Commander(Plugin):
 
 						rospy.loginfo("Sending command...")
 					else:
-						rospy.logerr("No state information received, can't generate command action!")
+						if not self.has_pose:
+							rospy.logerr("No state information received, can't generate command action!")
+						elif not self.isready:
+							rospy.logerr("Contrail is not ready to recieve goals!")
+						else:
+							rospy.logerr("Unexpected error (should never get here)!")
 				except:
 					rospy.logerr("Unexpected error!")
 			else:
@@ -169,3 +189,6 @@ class Commander(Plugin):
 	def callback_pose(self, msg_in):
 		self.has_pose = True
 		self.current_pose = msg_in.pose
+
+	def callback_isready(self, msg_in):
+		self.isready = msg_in.data
