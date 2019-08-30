@@ -79,16 +79,22 @@ def dispatch_continuous(wps,duration):
 		goal_base.yaws.append(wps[i].yaw)
 
 	client_base.send_goal(goal_base)
+
+	 # If shutdown is issued, cancel current mission before rospy is shutdown
+	rospy.on_shutdown(lambda : client_base.cancel_goal())
 	client_base.wait_for_result()
+
+	# Wait for the result of the goal
 	result_state = client_base.get_state()
 
 	success = (result_state == GoalStatus.SUCCEEDED)
-	if not success:
+	if result_state != GoalStatus.SUCCEEDED:
 		if(result_state == GoalStatus.PENDING) or (result_state == GoalStatus.ACTIVE):
-			pass
-			#TODO: Get preemtion working correctly
-			#rospy.loginfo("The cancelling current mission")
+			#XXX: Doesn't work in the case we cancelled the mission,
+			#	  instead it is handled above in rospy.on_shutdown()
+			#rospy.logerr("Tried to cancel mission, but got no response!")
 			#client_base.cancel_goal()
+			rospy.loginfo("Sent command to cancel current mission")
 		elif(result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
 			rospy.logwarn("The current mission was cancelled/aborted")
 		elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
@@ -97,7 +103,6 @@ def dispatch_continuous(wps,duration):
 			rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
 
 	return success
-
 
 def is_ready_callback(msg_in):
 	global is_ready
@@ -112,7 +117,7 @@ def timer_callback(e):
 		timer.shutdown()
 		success, wps = wph.load_waypoints()
 
-		if success and (len(wps) >= 2):
+		if success and (len(wps) >= 2) and not rospy.is_shutdown():
 			tracking_mode = str(rospy.get_param("~waypoints/mode"))
 
 			rospy.loginfo("Loaded %i waypoints for %s tracking" % (len(wps),tracking_mode))
@@ -136,9 +141,9 @@ def timer_callback(e):
 				rospy.signal_shutdown("Error: bad mode")
 
 			if success:
-				rospy.loginfo("Waypoint plan complete!")
+				rospy.loginfo("Mission complete!")
 
-			rospy.signal_shutdown("Waypoint plan over")
+			rospy.signal_shutdown("Mission over")
 		else:
 			if (len(wps) < 2):
 				rospy.logerr("Not enough waypoints were been loaded (%i)" % len(wps))
