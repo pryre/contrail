@@ -59,7 +59,6 @@ class ContrailManager {
 		Eigen::Vector3d output_pos_last_;
 		double output_rot_last_;
 
-		ros::Timer timer_;
 		actionlib::SimpleActionServer<contrail::TrajectoryAction> as_;
 
 	public:
@@ -103,7 +102,8 @@ class ContrailManager {
 	private:
 		//ROS callbacks
 		void callback_cfg_settings( contrail::ManagerParamsConfig &config, uint32_t level );
-		void callback_timer(const ros::TimerEvent& e);
+		void callback_actionlib_goal(void);
+		void callback_actionlib_preempt(void);
 
 		void set_action_goal();
 

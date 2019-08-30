@@ -53,7 +53,8 @@ ContrailManager::ContrailManager( const ros::NodeHandle &nh, std::string frame_i
 	//Send out our first "is_ready" message
 	allow_new_goals(is_ready_);
 
-	timer_ = nhp_.createTimer(ros::Duration(1.0/50.0), &ContrailManager::callback_timer, this );
+    as_.registerGoalCallback(boost::bind(&ContrailManager::callback_actionlib_goal, this));
+    as_.registerPreemptCallback(boost::bind(&ContrailManager::callback_actionlib_preempt, this));
 	as_.start();
 }
 
@@ -89,19 +90,21 @@ bool ContrailManager::is_allowing_new_goals( void ) {
 	return is_ready_;
 }
 
-void ContrailManager::callback_timer(const ros::TimerEvent& e) {
-	//Check for a new goal
-	if( as_.isNewGoalAvailable() ) {
-		set_action_goal();
-	}
+void ContrailManager::callback_actionlib_preempt(void) {
+	ROS_INFO("Contrail: Preempted goal");
+	as_.setPreempted();
+	spline_in_progress_ = false;
+	wait_reached_end_ = false;
+}
 
-	// Check that preempt has not been requested by the client
-	if( as_.isPreemptRequested() ) {
-		ROS_INFO("Contrail: Preempted");
-		as_.setPreempted();
-		spline_in_progress_ = false;
-		wait_reached_end_ = false;
-	}
+void ContrailManager::callback_actionlib_goal(void) {
+	//Check for a new goal
+	if( as_.isNewGoalAvailable() )
+		set_action_goal();
+
+	// Check for a preempt
+	if( as_.isPreemptRequested() )
+		callback_actionlib_preempt();
 }
 
 void ContrailManager::set_action_goal( void ) {
