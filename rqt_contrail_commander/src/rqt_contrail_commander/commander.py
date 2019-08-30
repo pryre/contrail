@@ -69,18 +69,16 @@ class Commander(Plugin):
 		instance_settings.set_value('contrail_prefix', self._widget.textbox_contrail.text())
 
 	def restore_settings(self, plugin_settings, instance_settings):
-		pose = "/uav/pose"
-		contrail = "/mavel/contrail"
+		pose = str(instance_settings.value('pose_prefix'))
+		contrail = str(instance_settings.value('contrail_prefix'))
 
-		if instance_settings.value('pose_prefix') is not None:
-			pose = str(instance_settings.value('pose_prefix'))
+		if pose:
+			self._widget.textbox_pose.setText(pose)
 
-		if instance_settings.value('contrail_prefix') is not None:
-			contrail = str(instance_settings.value('contrail_prefix'))
+		if contrail:
+			self._widget.textbox_contrail.setText(contrail)
 
-		self._widget.textbox_pose.setText(pose)
-		self._widget.textbox_contrail.setText(contrail)
-
+		# Update subscribers and action client
 		self.pose_changed()
 		self.contrail_changed()
 

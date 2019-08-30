@@ -60,7 +60,7 @@
     <string>/uav/pose</string>
    </property>
    <property name="placeholderText">
-    <string>/mavros</string>
+    <string>/uav/pose</string>
    </property>
   </widget>
   <widget class="QLabel" name="label_command">
@@ -114,7 +114,7 @@
     <string>/mavel/contrail</string>
    </property>
    <property name="placeholderText">
-    <string>/mavros</string>
+    <string>/mavel/contrail</string>
    </property>
   </widget>
   <widget class="QLabel" name="label_name">
