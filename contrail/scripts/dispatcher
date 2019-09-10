@@ -58,7 +58,7 @@ def dispatch_discrete(wps,nom_lvel,nom_rvel):
 		dz = wps[i+1].position.z - wps[i].position.z
 
 		lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
-		rt = (wps[i+1].yaw - wps[i].yaw ) / nom_rvel
+		rt = fabs(wps[i+1].yaw - wps[i].yaw) / nom_rvel
 
 		finished = dispatch_continuous([wps[i], wps[i+1]], max([lt,rt]))
 
