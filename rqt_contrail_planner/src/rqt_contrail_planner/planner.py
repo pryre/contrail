@@ -247,6 +247,18 @@ class Planner(Plugin):
 
 		self.update_plot()
 
+	def quiver_dir_from_yaw(self,psi):
+		n = len(psi)
+		u = [0.0]*n
+		v = [0.0]*n
+		w = [0.0]*n
+
+		for i in xrange(n):
+			u[i] = math.cos(psi[i])
+			v[i] = math.sin(psi[i])
+			#w[i] = 0.0
+		return (u,v,w)
+
 	def update_plot(self):
 		print("plot update")
 		self.clear_plot()
@@ -378,6 +390,8 @@ class Planner(Plugin):
 					self.plot_3d_ax.set_zlim(mid_z - max_range, mid_z + max_range)
 
 			self.plot_3d_ax.plot(x, y, z, 'bo')
+			(qu,qv,qw) = self.quiver_dir_from_yaw(psi)
+			self.plot_3d_ax.quiver(x, y, z, qu, qv, qw, length=0.25, pivot='tail')#, cmap='Reds', lw=2)
 			self.plot_x_ax_pos.plot(t, x, 'bo')
 			self.plot_x_ax_vel.plot(t, xd, 'bo')
 			self.plot_x_ax_acc.plot(t, xdd, 'bo')
@@ -394,6 +408,7 @@ class Planner(Plugin):
 			sel_ind = self._widget.table_waypoints.currentRow()
 			if sel_ind >= 0:
 				self.plot_3d_ax.plot([x[sel_ind]], [y[sel_ind]], [z[sel_ind]], 'ro')
+				self.plot_3d_ax.quiver([x[sel_ind]], [y[sel_ind]], [z[sel_ind]], [qu[sel_ind]], [qv[sel_ind]], [qw[sel_ind]], length=0.25, pivot='tail', colors=[[1.0,0.0,0.0]], lw=3)
 
 				self.plot_x_ax_pos.plot([t[sel_ind]], [x[sel_ind]], 'ro')
 				self.plot_x_ax_vel.plot([t[sel_ind]], [xd[sel_ind]], 'ro')
