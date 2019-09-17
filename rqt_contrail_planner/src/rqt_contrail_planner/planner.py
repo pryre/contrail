@@ -212,7 +212,7 @@ class Planner(Plugin):
 				with stream:
 					self.loaded_movement = Movement(filename=name, movement=yaml.safe_load(stream))
 			except yaml.YAMLError as e:
-				rospy.logerror(e)
+				rospy.logerr(e)
 
 		self.update_display()
 
@@ -368,7 +368,7 @@ class Planner(Plugin):
 					dti = d / (ni-1)
 					ti = [dti * i for i in range(ni)]
 				else:
-					rospy.logerror("Could not interpolate spline!")
+					rospy.logerr("Could not interpolate spline!")
 
 				self.plot_3d_ax.plot(x, y, z, 'b--')
 				self.plot_3d_ax.plot(xi, yi, zi, 'g-')
