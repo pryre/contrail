@@ -69,6 +69,7 @@ class Planner(Plugin):
 		self._widget.button_save.clicked.connect(self.button_save_pressed)
 		self._widget.button_save_as.clicked.connect(self.button_save_as_pressed)
 		self._widget.button_reset.clicked.connect(self.button_reset_pressed)
+		self._widget.button_yaw_smooth.clicked.connect(self.button_yaw_smooth_pressed)
 
 		# Flight Plan
 		self._widget.combobox_mode.currentIndexChanged.connect(self.mode_changed)
@@ -93,7 +94,7 @@ class Planner(Plugin):
 
 		# Class Variales
 		self.loaded_movement = Movement()
-		self.num_interp = 10
+		self.num_interp = 25
 
 		#Create plot figures
 		self.plot_3d_figure = Figure()
@@ -171,7 +172,7 @@ class Planner(Plugin):
 		try:
 			self.num_interp = int( instance_settings.value("num_interp") )
 		except (AttributeError,TypeError) as e:
-			self.num_interp = 10
+			self.num_interp = 25
 
 	#def trigger_configuration(self):
 		#TODO: allow user to set 'self.num_interp'
@@ -217,6 +218,23 @@ class Planner(Plugin):
 
 	def button_reset_pressed(self):
 		self.reset_flight_plan()
+
+
+	def make_yaw_continuous(self, psi_c, psi_p):
+		while math.fabs(psi_c - psi_p) > math.pi:
+			if psi_c > psi_p:
+				psi_c -= 2*math.pi
+			else:
+				psi_c += 2*math.pi
+
+		return psi_c
+
+	def button_yaw_smooth_pressed(self):
+		for i in xrange(len(self.loaded_movement.waypoints)):
+			if i > 1:
+				self.loaded_movement.waypoints[i].yaw = self.make_yaw_continuous(self.loaded_movement.waypoints[i].yaw,self.loaded_movement.waypoints[i-1].yaw)
+
+		self.update_display()
 
 	def reset_flight_plan(self):
 		self.plot_3d_ax.view_init(azim=-135)
@@ -304,7 +322,7 @@ class Planner(Plugin):
 			psidi = [0.0]*ni
 			psiddi = [0.0]*ni
 
-			if (n > 1) and (d > 0.0):
+			if (n > 1) and (d > 0.0) and not self.loaded_movement.is_discrete:
 				dt = d / (n-1)
 				t = [dt * i for i in range(n)]
 
@@ -352,10 +370,7 @@ class Planner(Plugin):
 				else:
 					rospy.logerror("Could not interpolate spline!")
 
-				# Waypoint data
-				if not self.loaded_movement.is_discrete:
-					self.plot_3d_ax.plot(x, y, z, 'b--')
-
+				self.plot_3d_ax.plot(x, y, z, 'b--')
 				self.plot_3d_ax.plot(xi, yi, zi, 'g-')
 				self.plot_x_ax_pos.plot(ti, xi, 'g-')
 				self.plot_x_ax_vel.plot(ti, xdi, 'g-')
@@ -369,25 +384,23 @@ class Planner(Plugin):
 				self.plot_psi_ax_pos.plot(ti, psii, 'g-')
 				self.plot_psi_ax_vel.plot(ti, psidi, 'g-')
 				self.plot_psi_ax_acc.plot(ti, psiddi, 'g-')
-
-				# Calculate nice limits for 3D
-				minx = min([min(x),min(xi)])
-				miny = min([min(y),min(yi)])
-				minz = min([min(z),min(zi)])
-				maxx = max([max(x),max(xi)])
-				maxy = max([max(y),max(yi)])
-				maxz = max([max(z),max(zi)])
-
-				max_range = max([maxx-minx, maxy-miny, maxz-minz]) / 2.0
-
-				mid_x = (maxx+minx) / 2.0
-				mid_y = (maxy+miny) / 2.0
-				mid_z = (maxz+minz) / 2.0
-
-				if max_range:
-					self.plot_3d_ax.set_xlim(mid_x - max_range, mid_x + max_range)
-					self.plot_3d_ax.set_ylim(mid_y - max_range, mid_y + max_range)
-					self.plot_3d_ax.set_zlim(mid_z - max_range, mid_z + max_range)
+			# Visual waypoint data
+			elif self.loaded_movement.is_discrete:
+				# Generate fake t data for some form of display
+				t = xrange(len(x))
+				self.plot_3d_ax.plot(x, y, z, 'g-')
+				self.plot_x_ax_pos.plot(t, x, 'g-')
+				self.plot_x_ax_vel.plot(t, xd, 'g-')
+				self.plot_x_ax_acc.plot(t, xdd, 'g-')
+				self.plot_y_ax_pos.plot(t, y, 'g-')
+				self.plot_y_ax_vel.plot(t, yd, 'g-')
+				self.plot_y_ax_acc.plot(t, ydd, 'g-')
+				self.plot_z_ax_pos.plot(t, z, 'g-')
+				self.plot_z_ax_vel.plot(t, zd, 'g-')
+				self.plot_z_ax_acc.plot(t, zdd, 'g-')
+				self.plot_psi_ax_pos.plot(t, psi, 'g-')
+				self.plot_psi_ax_vel.plot(t, psid, 'g-')
+				self.plot_psi_ax_acc.plot(t, psidd, 'g-')
 
 			self.plot_3d_ax.plot(x, y, z, 'bo')
 			(qu,qv,qw) = self.quiver_dir_from_yaw(psi)
@@ -423,8 +436,47 @@ class Planner(Plugin):
 				self.plot_psi_ax_vel.plot([t[sel_ind]], [psid[sel_ind]], 'ro')
 				self.plot_psi_ax_acc.plot([t[sel_ind]], [psidd[sel_ind]], 'ro')
 
+
+			# Calculate nice limits for 3D
+			minx = min([min(x),min(xi)])
+			miny = min([min(y),min(yi)])
+			minz = min([min(z),min(zi)])
+			maxx = max([max(x),max(xi)])
+			maxy = max([max(y),max(yi)])
+			maxz = max([max(z),max(zi)])
+
+			max_range = 1.25*max([maxx-minx, maxy-miny, maxz-minz]) / 2.0
+
+			mid_x = (maxx+minx) / 2.0
+			mid_y = (maxy+miny) / 2.0
+			mid_z = (maxz+minz) / 2.0
+
+			if max_range:
+				self.plot_3d_ax.set_xlim(mid_x - max_range, mid_x + max_range)
+				self.plot_3d_ax.set_ylim(mid_y - max_range, mid_y + max_range)
+				self.plot_3d_ax.set_zlim(mid_z - max_range, mid_z + max_range)
+
+			self.set_nice_limits_2d(self.plot_x_ax_pos, 0, t[-1], min([min(x),min(xi)]), max([max(x),max(xi)]))
+			self.set_nice_limits_2d(self.plot_x_ax_vel, 0, t[-1], min([min(xd),min(xdi)]), max([max(xd),max(xdi)]))
+			self.set_nice_limits_2d(self.plot_x_ax_acc, 0, t[-1], min([min(xdd),min(xddi)]), max([max(xdd),max(xddi)]))
+			self.set_nice_limits_2d(self.plot_y_ax_pos, 0, t[-1], min([min(y),min(yi)]), max([max(y),max(yi)]))
+			self.set_nice_limits_2d(self.plot_y_ax_vel, 0, t[-1], min([min(yd),min(ydi)]), max([max(yd),max(ydi)]))
+			self.set_nice_limits_2d(self.plot_y_ax_acc, 0, t[-1], min([min(ydd),min(yddi)]), max([max(ydd),max(yddi)]))
+			self.set_nice_limits_2d(self.plot_z_ax_pos, 0, t[-1], min([min(z),min(zi)]), max([max(z),max(zi)]))
+			self.set_nice_limits_2d(self.plot_z_ax_vel, 0, t[-1], min([min(zd),min(zdi)]), max([max(zd),max(zdi)]))
+			self.set_nice_limits_2d(self.plot_z_ax_acc, 0, t[-1], min([min(zdd),min(zddi)]), max([max(zdd),max(zddi)]))
+			self.set_nice_limits_2d(self.plot_psi_ax_pos, 0, t[-1], min([min(psi),min(psii)]), max([max(psi),max(psii)]))
+			self.set_nice_limits_2d(self.plot_psi_ax_vel, 0, t[-1], min([min(psid),min(psidi)]), max([max(psid),max(psidi)]))
+			self.set_nice_limits_2d(self.plot_psi_ax_acc, 0, t[-1], min([min(psidd),min(psiddi)]), max([max(psidd),max(psiddi)]))
+
 		# Refresh current canvas
 		self.draw_focused_plot(self._widget.tabgroup_plots.currentIndex())
+
+	def set_nice_limits_2d(self, ax, x_min, x_max, y_min, y_max):
+		mr = 1.25*(y_max-y_min) / 2.0
+		y_mid = (y_max+y_min) / 2.0
+		ax.set_xlim(x_min, x_max)
+		ax.set_ylim(y_mid - mr, y_mid + mr)
 
 	def draw_focused_plot(self,index):
 		if(index == 0):

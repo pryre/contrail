@@ -165,7 +165,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignCenter</set>
+           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
           </property>
          </column>
          <column>
@@ -179,7 +179,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignCenter</set>
+           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
           </property>
          </column>
          <column>
@@ -193,7 +193,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignCenter</set>
+           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
           </property>
          </column>
          <column>
@@ -207,7 +207,7 @@
            </font>
           </property>
           <property name="textAlignment">
-           <set>AlignCenter</set>
+           <set>AlignHCenter|AlignVCenter|AlignCenter</set>
           </property>
          </column>
         </widget>
@@ -259,11 +259,22 @@
             </widget>
            </item>
            <item>
-            <widget class="QPushButton" name="button_reset">
-             <property name="text">
-              <string>Reset Flight Plan</string>
-             </property>
-            </widget>
+            <layout class="QHBoxLayout" name="horizontalLayout">
+             <item>
+              <widget class="QPushButton" name="button_yaw_smooth">
+               <property name="text">
+                <string>Make Yaw Smooth</string>
+               </property>
+              </widget>
+             </item>
+             <item>
+              <widget class="QPushButton" name="button_reset">
+               <property name="text">
+                <string>Reset Flight Plan</string>
+               </property>
+              </widget>
+             </item>
+            </layout>
            </item>
           </layout>
          </widget>

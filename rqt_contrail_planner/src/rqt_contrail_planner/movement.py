@@ -1,4 +1,5 @@
 import rospy
+import math
 from rqt_contrail_planner.waypoint import Waypoint
 
 class Movement():
@@ -35,6 +36,10 @@ class Movement():
 					while 'wp'+str(i) in wps:
 						self.waypoints.append(Waypoint(wp_yaml=wps['wp'+str(i)]))
 						#rospy.loginfo(self.waypoints[i])
+						# XXX: Continous yaw is applied manually through GUI
+						#if i > 1:
+						#	self.waypoints[i].yaw = self.make_yaw_continuous(self.waypoints[i].yaw, self.waypoints[i-1].yaw)
+
 						i+=1
 
 			except KeyError as e:
