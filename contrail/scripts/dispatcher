@@ -17,159 +17,170 @@ from nav_msgs.msg import Path
 from std_msgs.msg import Bool
 
 global timer
-global pub_discrete_path
-global client_base
-global is_ready
+global dispatcher
 
-def quarternion_from_yaw(yaw):
-	y2 = yaw*0.5
-	q = Quaternion()
-	q.w = cos(y2)
-	q.x = 0.0
-	q.y = 0.0
-	q.z = sin(y2)
-	return q
+class Dispatcher():
+	def __init__(self, action_topic):
 
-def send_discrete_path(wps):
-	global pub_discrete_path
+		rospy.loginfo("Loading waypionts from parameters...")
+		self.load_success, self.wps = wph.load_waypoints()
 
-	path = Path()
-	path.header.frame_id = "map"
-	path.header.stamp = rospy.Time.now()
+		if self.load_success and (len(self.wps) >= 2) and not rospy.is_shutdown():
+			self.tracking_mode = str(rospy.get_param("~waypoints/mode"))
+			rospy.loginfo("Loaded %i waypoints for %s tracking" % (len(self.wps),self.tracking_mode))
 
-	for i in range(len(wps)):
-		ps = PoseStamped()
-		ps.header.frame_id = path.header.frame_id
-		ps.header.stamp = path.header.stamp
-		ps.pose.position = wps[i].position
-		ps.pose.orientation = quarternion_from_yaw(wps[i].yaw)
+			self.pub_discrete_path = rospy.Publisher("~discrete_path", Path, queue_size=1, latch=True)
+			if self.tracking_mode == "discrete":
+				self.send_discrete_path(self.wps) # Send out display for nice tracking
+			else:
+				self.send_discrete_path([]) # Clear display, not needed for continuous
 
-		path.poses.append(ps)
-
-	pub_discrete_path.publish(path)
-
-def dispatch_discrete(wps,nom_lvel,nom_rvel):
-	finished = True
-
-	for i in range(len(wps) - 1):
-		rospy.loginfo("Dispatching segment: %i" % (i+1))
-		dx = wps[i+1].position.x - wps[i].position.x
-		dy = wps[i+1].position.y - wps[i].position.y
-		dz = wps[i+1].position.z - wps[i].position.z
-
-		lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
-		rt = fabs(wps[i+1].yaw - wps[i].yaw) / nom_rvel
-
-		finished = dispatch_continuous([wps[i], wps[i+1]], max([lt,rt]))
-
-		if not finished:
-			rospy.logwarn("Cancelling remaining segments")
-			break
-
-	return finished
-
-def dispatch_continuous(wps,duration):
-	goal_base = TrajectoryGoal()
-
-	goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
-	goal_base.duration = rospy.Duration.from_sec(duration)
-
-	for i in range(len(wps)):
-		goal_base.positions.append(wps[i].position)
-		goal_base.yaws.append(wps[i].yaw)
-
-	client_base.send_goal(goal_base)
-
-	 # If shutdown is issued, cancel current mission before rospy is shutdown
-	rospy.on_shutdown(lambda : client_base.cancel_goal())
-	client_base.wait_for_result()
-
-	# Wait for the result of the goal
-	result_state = client_base.get_state()
-
-	success = (result_state == GoalStatus.SUCCEEDED)
-	if result_state != GoalStatus.SUCCEEDED:
-		if(result_state == GoalStatus.PENDING) or (result_state == GoalStatus.ACTIVE):
-			#XXX: Doesn't work in the case we cancelled the mission,
-			#	  instead it is handled above in rospy.on_shutdown()
-			#rospy.logerr("Tried to cancel mission, but got no response!")
-			#client_base.cancel_goal()
-			rospy.loginfo("Sent command to cancel current mission")
-		elif(result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
-			rospy.logwarn("The current mission was cancelled/aborted")
-		elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
-			rospy.logerr("Error: The current mission was recalled/rejected")
+			self.client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)
 		else:
-			rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
+			error = 'undefined'
 
-	return success
+			if (len(self.wps) < 2):
+				rospy.logerr("Not enough waypoints were been loaded (%i)" % len(self.wps))
+				error = 'no waypoints'
+			else:
+				rospy.logerr("Unable to locate waypoint parameters")
+				error = 'no parameters'
+
+			rospy.signal_shutdown("Error: " + error)
+
+	def wait_for_contrail(self):
+		self.client_base.wait_for_server()
+
+	def quarternion_from_yaw(self,yaw):
+		y2 = yaw*0.5
+		q = Quaternion()
+		q.w = cos(y2)
+		q.x = 0.0
+		q.y = 0.0
+		q.z = sin(y2)
+		return q
+
+	def send_discrete_path(self, wps):
+		path = Path()
+		path.header.frame_id = "map"
+		path.header.stamp = rospy.Time.now()
+
+		for i in range(len(wps)):
+			ps = PoseStamped()
+			ps.header.frame_id = path.header.frame_id
+			ps.header.stamp = path.header.stamp
+			ps.pose.position = self.wps[i].position
+			ps.pose.orientation = self.quarternion_from_yaw(wps[i].yaw)
+
+			path.poses.append(ps)
+
+		self.pub_discrete_path.publish(path)
+
+	def dispatch_discrete(self, wps,nom_lvel,nom_rvel):
+		finished = True
+
+		for i in xrange(len(wps) - 1):
+			rospy.loginfo("Dispatching segment: %i" % (i+1))
+			dx = wps[i+1].position.x - wps[i].position.x
+			dy = wps[i+1].position.y - wps[i].position.y
+			dz = wps[i+1].position.z - wps[i].position.z
+
+			lt = sqrt((dx*dx)+(dy*dy)+(dz*dz)) / nom_lvel
+			rt = fabs(wps[i+1].yaw - wps[i].yaw) / nom_rvel
+
+			finished = self.dispatch_continuous([wps[i], wps[i+1]], max([lt,rt]))
+
+			if not finished:
+				rospy.logwarn("Cancelling remaining segments")
+				break
+
+		return finished
+
+	def dispatch_continuous(self,wps,duration):
+		goal_base = TrajectoryGoal()
+
+		goal_base.start = rospy.Time.now() + rospy.Duration.from_sec(1)
+		goal_base.duration = rospy.Duration.from_sec(duration)
+
+		for i in range(len(wps)):
+			goal_base.positions.append(wps[i].position)
+			goal_base.yaws.append(wps[i].yaw)
+
+		self.client_base.send_goal(goal_base)
+
+		 # If shutdown is issued, cancel current mission before rospy is shutdown
+		rospy.on_shutdown(lambda : self.client_base.cancel_goal())
+		self.client_base.wait_for_result()
+
+		# Wait for the result of the goal
+		result_state = self.client_base.get_state()
+
+		success = (result_state == GoalStatus.SUCCEEDED)
+		if result_state != GoalStatus.SUCCEEDED:
+			if(result_state == GoalStatus.PENDING) or (result_state == GoalStatus.ACTIVE):
+				#XXX: Doesn't work in the case we cancelled the mission,
+				#	  instead it is handled above in rospy.on_shutdown()
+				#rospy.logerr("Tried to cancel mission, but got no response!")
+				#self.client_base.cancel_goal()
+				rospy.loginfo("Sent command to cancel current mission")
+			elif(result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
+				rospy.logwarn("The current mission was cancelled/aborted")
+			elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
+				rospy.logerr("Error: The current mission was recalled/rejected")
+			else:
+				rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
+
+		return success
+
+	def run_mission(self):
+		success = False
+
+		if self.tracking_mode == "discrete":
+			nom_lvel = rospy.get_param("~waypoints/nominal_velocity")
+			nom_rvel = rospy.get_param("~waypoints/nominal_yawrate")
+
+			success = self.dispatch_discrete(self.wps,nom_lvel,nom_rvel)
+		elif self.tracking_mode == "continuous":
+			duration = rospy.get_param("~waypoints/duration")
+
+			success = self.dispatch_continuous(self.wps,duration)
+		else:
+			rospy.logerr("Unknown tracking mode (%s)" % self.tracking_mode)
+			rospy.signal_shutdown("Error: bad mode")
+
+		if success:
+			rospy.loginfo("Mission complete!")
+
+		rospy.signal_shutdown("Mission over")
+
+def timer_callback(e):
+	global dispatcher
+	global timer
+	global is_ready
+
+	if (e.current_real > rospy.Time(0)) and is_ready:
+		timer.shutdown()
+		dispatcher.run_mission()
 
 def is_ready_callback(msg_in):
 	global is_ready
 	is_ready = msg_in.data
 
-def timer_callback(e):
-	global timer
-
-	if (e.current_real > rospy.Time(0)) and is_ready:
-		rospy.loginfo("Loading waypionts from parameters...")
-
-		timer.shutdown()
-		success, wps = wph.load_waypoints()
-
-		if success and (len(wps) >= 2) and not rospy.is_shutdown():
-			tracking_mode = str(rospy.get_param("~waypoints/mode"))
-
-			rospy.loginfo("Loaded %i waypoints for %s tracking" % (len(wps),tracking_mode))
-			success = False
-
-			if tracking_mode == "discrete":
-				nom_lvel = rospy.get_param("~waypoints/nominal_velocity")
-				nom_rvel = rospy.get_param("~waypoints/nominal_yawrate")
-
-				send_discrete_path(wps) # Send out display for nice tracking
-
-				success = dispatch_discrete(wps,nom_lvel,nom_rvel)
-			elif tracking_mode == "continuous":
-				duration = rospy.get_param("~waypoints/duration")
-
-				send_discrete_path([]) # Clear display, not needed for continuous
-
-				success = dispatch_continuous(wps,duration)
-			else:
-				rospy.logerr("Unknown tracking mode (%s)" % tracking_mode)
-				rospy.signal_shutdown("Error: bad mode")
-
-			if success:
-				rospy.loginfo("Mission complete!")
-
-			rospy.signal_shutdown("Mission over")
-		else:
-			if (len(wps) < 2):
-				rospy.logerr("Not enough waypoints were been loaded (%i)" % len(wps))
-				rospy.signal_shutdown("Error: no waypoints")
-			else:
-				rospy.logerr("Unable to locate waypoint parameters")
-				rospy.signal_shutdown("Error: no parameters")
-
 def waypoint_pub():
 	global timer
-	global pub_discrete_path
-	global client_base
 	global is_ready
+	global dispatcher
 
 	is_ready = False
-	rospy.init_node('load_waypoints', anonymous=True)
-
-	pub_discrete_path = rospy.Publisher("~discrete_path", Path, queue_size=1, latch=True)
-
-	rospy.loginfo("Waiting for contrail to come online and ready")
+	rospy.init_node('contrail_dispatcher', anonymous=True)
 
 	action_topic = rospy.get_param("~action_topic", 'contrail')
-	client_base = actionlib.SimpleActionClient(action_topic, TrajectoryAction)
-	client_base.wait_for_server()
-	ready_sub = rospy.Subscriber(action_topic + "/is_ready", Bool, is_ready_callback)
 
+	dispatcher = Dispatcher(action_topic)
+	rospy.loginfo("Waiting for contrail to come online and ready...")
+	dispatcher.wait_for_contrail()
+
+	ready_sub = rospy.Subscriber(action_topic + "/is_ready", Bool, is_ready_callback)
 	timer = rospy.Timer(rospy.Duration(1.0/50.0), timer_callback)
 
 	rospy.spin()
