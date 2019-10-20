@@ -135,6 +135,8 @@ class Dispatcher():
 	def run_mission(self):
 		success = False
 
+		rospy.loginfo('Dispatching mission...')
+
 		if self.tracking_mode == "discrete":
 			nom_lvel = rospy.get_param("~waypoints/nominal_velocity")
 			nom_rvel = rospy.get_param("~waypoints/nominal_yawrate")
