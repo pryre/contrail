@@ -10,7 +10,7 @@ template <std::size_t N>
 using spline_via_t = std::array<double,N>;
 
 template <std::size_t N>
-using polynomial_coeffs_t = std::array<std::array<double,2*N>,N>;
+using polynomial_coeffs_t = std::array<std::vector<double>,N>;
 
 
 template<std::size_t N>

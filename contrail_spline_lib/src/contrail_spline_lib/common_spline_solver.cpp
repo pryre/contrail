@@ -7,21 +7,22 @@
 
 using namespace contrail_spline_lib;
 
-/*
-TODO:
-template<std::size_t N>
-std::array<double,N> polyder(const std::array<double,N>& c) {
-	std::array<double,N> dc;
 
-	for(unsigned int i = c.size()-1; i > 0; i--) {
-		if (c[i] != 0) {
-			dc[i] = i*c[i];
+//Returns the a vector representing the derivative of a polynomial
+std::vector<double> polyder(const std::vector<double>& c) {
+	std::vector<double> dc;
+	if (c.size() > 1) {
+		dc.reserve(c.size()-1);
+
+		unsigned int n = c.size()-1;
+		for(unsigned int i = 0; i < c.size()-1; i++) {
+			dc.push_back(n*c[i]);
+			n--;
 		}
 	}
 
 	return dc;
 }
-*/
 
 // Generates a linear system of a set dimension for the use in solving for
 // a spline in the case that the spline is time-normalised.
@@ -100,31 +101,17 @@ void contrail_spline_lib::normalised_spline_solver(normalised_spline_t<N>& splin
 
 template<std::size_t N>
 spline_via_t<N> normalised_spline_lookup(const polynomial_segment_t<N>& seg, const double ndt) {
-	spline_via_t<N> nq;
-
-	polynomial_coeffs_t<N> coeffs = seg.coeffs;
-
-
 	/*
-	TODO:
+	spline_via_t<N> nq;
+	std::fill(std::begin(nq), std::end(nq), 0.0);
+
 	for(unsigned int i = 0; i < nq.size(); i++) {
-        // Perform the polynomial derivative (skip first)
-        if i > 1
-            a = polyder(a);
-        end
-
-        for j = 1:length(a)
-            p = length(a)-j;
-
-            if p > 0
-                qn(i,:) = qn(i,:) + a(j).*(t.^p);
-            else
-                % This is the constant, so multiply by ones instead
-                qn(i,:) = qn(i,:) + a(j);
-            end
-        end
+		unsigned int n = c.size()-1;
+		for(unsigned int j = 0; j < seg.coeffs[i].size()-1; j++) {
+			nq[i] += seg.coeffs[i][j]*pow(ndt,n);
+			n--;
+		}
 	}
-	*/
 
 	//Devide derivatives by segment dt to denormalise
 	spline_via_t<N> q;
@@ -132,6 +119,29 @@ spline_via_t<N> normalised_spline_lookup(const polynomial_segment_t<N>& seg, con
 	q[0] = nq[0];
 	for(unsigned int i = 1; i < q.size(); i++)
 		q[i] = nq[i] / pow(seg.duration,i);
+
+	*/
+
+	spline_via_t<N> q;
+	std::fill(std::begin(q), std::end(q), 0.0);
+
+	// Loop through each level of derivatives
+	for(unsigned int i = 0; i < q.size(); i++) {
+		double nq = 0;
+
+		unsigned int n = seg.coeffs[i].size()-1;
+		for(unsigned int j = 0; j < seg.coeffs[i].size()-1; j++) {
+			nq += seg.coeffs[i][j]*pow(ndt,n);
+			n--;
+		}
+
+		if(i==0){
+			q[i] = nq;
+		} else {
+			//Devide derivatives by segment dt to denormalise
+			q[i] = nq / pow(seg.duration,i);
+		}
+	}
 
 	return q;
 }
