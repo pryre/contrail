@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 
-#include <contrail/ContrailManager.h>
+#include <contrail_manager/ContrailManager.h>
 
 #include <std_msgs/Bool.h>
 #include <nav_msgs/Path.h>
@@ -10,8 +10,8 @@
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
 
-#include <contrail/TrajectoryAction.h>
-#include <contrail/ManagerParamsConfig.h>
+#include <contrail_manager/TrajectoryAction.h>
+#include <contrail_manager/ManagerParamsConfig.h>
 #include <contrail_spline_lib/quintic_spline_types.h>
 #include <contrail_spline_lib/interpolated_quintic_spline.h>
 
@@ -108,7 +108,7 @@ void ContrailManager::callback_actionlib_goal(void) {
 }
 
 void ContrailManager::set_action_goal( void ) {
-	boost::shared_ptr<const contrail::TrajectoryGoal> goal = as_.acceptNewGoal();
+	boost::shared_ptr<const contrail_manager::TrajectoryGoal> goal = as_.acceptNewGoal();
 
 	if(is_ready_) {
 		if( (goal->duration > ros::Duration(0) ) &&
@@ -242,7 +242,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 				acc = Eigen::Vector3d::Zero();
 				rrate = 0.0;
 
-				contrail::TrajectoryFeedback feedback;
+				contrail_manager::TrajectoryFeedback feedback;
 				feedback.progress = -1.0;
 				feedback.position = vector_from_eig(pos);
 				feedback.velocity = vector_from_eig(vel);
@@ -289,7 +289,7 @@ bool ContrailManager::get_reference( Eigen::Vector3d &pos,
 
 				//nar is discarded
 
-				contrail::TrajectoryFeedback feedback;
+				contrail_manager::TrajectoryFeedback feedback;
 				feedback.progress = t_norm;
 				feedback.position = vector_from_eig(pos);
 				feedback.velocity = vector_from_eig(vel);
@@ -343,7 +343,7 @@ void ContrailManager::check_end_reached( const Eigen::Affine3d &g_c ) {
 									g_c.translation(),
 									yaw_c ) ) {
 
-			contrail::TrajectoryResult result;
+			contrail_manager::TrajectoryResult result;
 			result.position_final = vector_from_eig( g_c.translation() );
 			result.yaw_final = yaw_c;
 			as_.setSucceeded(result);
@@ -358,7 +358,7 @@ void ContrailManager::check_end_reached( const Eigen::Affine3d &g_c ) {
 // Private
 //=======================
 
-void ContrailManager::callback_cfg_settings( contrail::ManagerParamsConfig &config, uint32_t level ) {
+void ContrailManager::callback_cfg_settings( contrail_manager::ManagerParamsConfig &config, uint32_t level ) {
 	param_end_position_accuracy_ = config.end_position_accuracy;
 	param_end_yaw_accuracy_ = config.end_yaw_accuracy;
 	param_spline_approx_res_ = config.spline_res_per_sec;

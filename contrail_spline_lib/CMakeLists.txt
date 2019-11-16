@@ -129,11 +129,15 @@ add_library(quintic_spline src/contrail_spline_lib/quintic_spline_solver.cpp src
 add_library(_quintic_spline_solver_wrapper_cpp src/contrail_spline_lib/_quintic_spline_solver_wrapper_cpp.cpp)
 add_library(_interpolated_quintic_spline_wrapper_cpp src/contrail_spline_lib/_interpolated_quintic_spline_wrapper_cpp.cpp)
 
+add_library(common_spline src/contrail_spline_lib/common_spline_solver.cpp)
+
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 add_dependencies(quintic_spline ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 add_dependencies(_quintic_spline_solver_wrapper_cpp ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+
+add_dependencies(common_spline ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
 ## With catkin_make all packages are built within a single CMake context
@@ -152,6 +156,11 @@ add_dependencies(_quintic_spline_solver_wrapper_cpp ${${PROJECT_NAME}_EXPORTED_T
 
 ## Specify libraries to link a library or executable target against
 target_link_libraries(quintic_spline
+  ${catkin_LIBRARIES}
+  ${EIGEN3_LIBRARIES}
+)
+
+target_link_libraries(common_spline
   ${catkin_LIBRARIES}
   ${EIGEN3_LIBRARIES}
 )

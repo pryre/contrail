@@ -1,6 +1,6 @@
 <?xml version='1.0'?>
 <launch>
-	<node pkg="contrail" type="converter_waypoints_path" name="wp_converter" clear_params="true" output="screen">
+	<node pkg="contrail_manager" type="converter_waypoints_path" name="wp_converter" clear_params="true" output="screen">
 		<remap from="~waypoints" to="/waypoints" />
 		<remap from="~path" to="/path" />
 	</node>

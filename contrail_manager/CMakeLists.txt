@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(contrail)
+project(contrail_manager)
 
 ## Compile as C++11, supported in ROS Kinetic and newer
 add_compile_options(-std=c++11)
@@ -112,7 +112,7 @@ generate_dynamic_reconfigure_options(
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
-  LIBRARIES ${PROJECT_NAME}_manager
+  LIBRARIES ${PROJECT_NAME}
   CATKIN_DEPENDS contrail_msgs contrail_spline_lib #tinyspline_ros
   DEPENDS EIGEN3
 )
@@ -130,7 +130,7 @@ include_directories(
 )
 
 ## Declare a C++ library
-add_library(${PROJECT_NAME}_manager
+add_library(${PROJECT_NAME}
   src/${PROJECT_NAME}/manager.cpp
 )
 add_library(${PROJECT_NAME}_guidance
@@ -141,7 +141,7 @@ add_library(${PROJECT_NAME}_guidance
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
 
-add_dependencies(${PROJECT_NAME}_manager ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
+add_dependencies(${PROJECT_NAME} ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 add_dependencies(${PROJECT_NAME}_guidance ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS} ${PROJECT_NAME}_gencfg)
 #add_dependencies(${PROJECT_NAME}_path_extract ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
@@ -161,12 +161,12 @@ add_executable(${PROJECT_NAME}_guidance_node src/guidance_node.cpp)
 add_dependencies(${PROJECT_NAME}_guidance_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-target_link_libraries(${PROJECT_NAME}_manager
+target_link_libraries(${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 
 target_link_libraries(${PROJECT_NAME}_guidance
-  ${PROJECT_NAME}_manager
+  ${PROJECT_NAME}
   ${catkin_LIBRARIES}
 )
 

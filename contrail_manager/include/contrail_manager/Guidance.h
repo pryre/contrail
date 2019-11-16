@@ -2,7 +2,7 @@
 
 #include <ros/ros.h>
 
-#include <contrail/ContrailManager.h>
+#include <contrail_manager/ContrailManager.h>
 
 #include <nav_msgs/Odometry.h>
 

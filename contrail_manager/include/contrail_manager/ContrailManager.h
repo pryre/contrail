@@ -9,8 +9,8 @@
 #include <geometry_msgs/Vector3.h>
 #include <geometry_msgs/Quaternion.h>
 
-#include <contrail/TrajectoryAction.h>
-#include <contrail/ManagerParamsConfig.h>
+#include <contrail_manager/TrajectoryAction.h>
+#include <contrail_manager/ManagerParamsConfig.h>
 #include <contrail_spline_lib/interpolated_quintic_spline.h>
 
 #include <actionlib/server/simple_action_server.h>
@@ -31,7 +31,7 @@ class ContrailManager {
 		ros::Publisher pub_spline_approx_;	//Publishes a approximate visualization of the calculated spline as feedback
 		ros::Publisher pub_spline_points_;	//Publishes a path representing the interpolated spline points
 
-		dynamic_reconfigure::Server<contrail::ManagerParamsConfig> dyncfg_settings_;
+		dynamic_reconfigure::Server<contrail_manager::ManagerParamsConfig> dyncfg_settings_;
 
 		std::string param_frame_id_;
 		int param_spline_approx_res_;
@@ -59,7 +59,7 @@ class ContrailManager {
 		Eigen::Vector3d output_pos_last_;
 		double output_rot_last_;
 
-		actionlib::SimpleActionServer<contrail::TrajectoryAction> as_;
+		actionlib::SimpleActionServer<contrail_manager::TrajectoryAction> as_;
 
 	public:
 		ContrailManager( const ros::NodeHandle &nh, std::string frame_id = "map", const bool is_ready = false );
@@ -101,7 +101,7 @@ class ContrailManager {
 
 	private:
 		//ROS callbacks
-		void callback_cfg_settings( contrail::ManagerParamsConfig &config, uint32_t level );
+		void callback_cfg_settings( contrail_manager::ManagerParamsConfig &config, uint32_t level );
 		void callback_actionlib_goal(void);
 		void callback_actionlib_preempt(void);
 

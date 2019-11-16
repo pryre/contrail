@@ -1,6 +1,6 @@
 #include <ros/ros.h>
 
-#include <contrail/Guidance.h>
+#include <contrail_manager/Guidance.h>
 
 #include <nav_msgs/Odometry.h>
 #include <mavros_msgs/PositionTarget.h>
