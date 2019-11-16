@@ -99,8 +99,12 @@ void contrail_spline_lib::normalised_spline_solver(normalised_spline_t<N>& splin
 	}
 }
 
+
+//Returns the denormalised via values
 template<std::size_t N>
 spline_via_t<N> normalised_spline_lookup(const polynomial_segment_t<N>& seg, const double ndt) {
+	assert((ndt >= 0.0) && (ndt <= 1.0));
+
 	/*
 	spline_via_t<N> nq;
 	std::fill(std::begin(nq), std::end(nq), 0.0);
