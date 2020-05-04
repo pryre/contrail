@@ -4,13 +4,13 @@ import sys
 from math import *
 
 import roslib
-roslib.load_manifest('contrail')
+roslib.load_manifest('contrail_manager')
 import rospy
 import actionlib
 from actionlib_msgs.msg import GoalStatus
 
-import contrail.waypoint_helper as wph
-from contrail.msg import TrajectoryAction, TrajectoryGoal
+import contrail_manager.waypoint_helper as wph
+from contrail_manager.msg import TrajectoryAction, TrajectoryGoal
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Quaternion
 from nav_msgs.msg import Path
