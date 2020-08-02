@@ -123,10 +123,14 @@ class Dispatcher():
 				#rospy.logerr("Tried to cancel mission, but got no response!")
 				#self.client_base.cancel_goal()
 				rospy.loginfo("Sent command to cancel current mission")
-			elif(result_state == GoalStatus.PREEMPTED) or (result_state == GoalStatus.ABORTED):
-				rospy.logwarn("The current mission was cancelled/aborted")
-			elif(result_state == GoalStatus.RECALLED) or (result_state == GoalStatus.REJECTED):
-				rospy.logerr("Error: The current mission was recalled/rejected")
+			elif(result_state == GoalStatus.PREEMPTED):
+				rospy.logwarn("The current mission was cancelled")
+			elif(result_state == GoalStatus.ABORTED):
+				rospy.logwarn("The current mission was aborted")
+			elif(result_state == GoalStatus.RECALLED):
+				rospy.logerr("Error: The current mission was recalled")
+			elif(result_state == GoalStatus.REJECTED):
+				rospy.logerr("Error: The current mission was rejected")
 			else:
 				rospy.logerr("Error: An unknown goal status was recieved, mission cancelled")
 
