@@ -105,7 +105,7 @@ catkin_python_setup()
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
   INCLUDE_DIRS include ${EIGEN3_INCLUDE_DIRS}
-  LIBRARIES quintic_spline _quintic_spline_solver_wrapper_cpp _interpolated_quintic_spline_wrapper_cpp
+  LIBRARIES quintic_spline # _quintic_spline_solver_wrapper_cpp _interpolated_quintic_spline_wrapper_cpp
   CATKIN_DEPENDS roscpp
   DEPENDS EIGEN3
 )

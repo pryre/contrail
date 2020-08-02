@@ -11,7 +11,7 @@ from std_msgs.msg import Bool
 from geometry_msgs.msg import Pose, Vector3, Quaternion, PoseStamped
 
 import actionlib
-from contrail.msg import TrajectoryAction, TrajectoryGoal
+from contrail_manager.msg import TrajectoryAction, TrajectoryGoal
 
 class Commander(Plugin):
 	def __init__(self, context):
