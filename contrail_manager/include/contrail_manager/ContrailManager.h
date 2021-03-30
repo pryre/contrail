@@ -69,7 +69,7 @@ class ContrailManager {
 		void set_frame_id( std::string frame_id );
 
 		bool has_reference( const ros::Time t );
-		bool clear_reference( void );
+		void clear_reference( void );
 
 		//Parent node/library should must indicate to contrail that it is ready to go
 		//before contrail will accept new goals. Setting to false will cause contrail
