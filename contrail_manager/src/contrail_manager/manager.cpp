@@ -70,7 +70,7 @@ bool ContrailManager::has_reference( const ros::Time t ) {
 	return ( spline_start_ > ros::Time(0) );
 }
 
-bool ContrailManager::clear_reference( void ) {
+void ContrailManager::clear_reference( void ) {
 	spline_start_ = ros::Time(0);
 	spline_in_progress_ = false;
 
